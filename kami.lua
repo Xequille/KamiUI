@@ -1,11 +1,22 @@
 --[[
-    KAMI UI - v1.2.1
-    Pitch Dark Edition  ·  Minimal · Sharp · Animated
+    KAMI UI - v1.3.0
+    Pitch Dark Edition  ·  Minimal · Sharp · Animated · Depth+
 
-    Features:
-      - Pitch Dark default theme (+ Obsidian Gold, Cyber Gold, Midnight Gold, Graphite)
-      - Sharp rect aesthetic (no UICorner)
-      - Accent-bar header + clean dual-label title (no RichText ghosting)
+    New in 1.3.0:
+      - Deeper visuals: ambient window glow, vertical gradients,
+        animated accent underlines, card sheen + hover accent pips
+      - Gradient slider fills, gradient accent bars, depth-mapped cards
+      - Two new accent themes: Violet Nebula & Crimson Pulse
+      - Completely rebuilt loading screen:
+          drifting ambient glow · HUD corner brackets · floating particles
+          rotating HUD rings · orbiting accent dots · gradient progress
+          bar with diamond head + live percentage
+
+    Core features:
+      - Multiple themes (Pitch Dark, Graphite, Obsidian Gold, Cyber Gold,
+        Midnight Gold, Violet Nebula, Crimson Pulse)
+      - Sharp rect aesthetic (no UICorner) with added depth
+      - Accent-bar header + clean dual-label title
       - Smooth animations: window open/close, collapse, tab slide, ripples,
         toggle/slider/dropdown motion, sliding notifications w/ timer bar
       - Custom tab icons via rbxassetid / number / built-in name
@@ -24,7 +35,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.2.1"
+    Version = "1.3.0"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -101,9 +112,38 @@ local Themes = {
         TextMuted   = RGB(130, 138, 150),
         TextDull    = RGB(75, 82, 92),
     },
+    ["Violet Nebula"] = {
+        Bg          = RGB(9, 8, 14),
+        Sidebar     = RGB(12, 10, 18),
+        Card        = RGB(16, 13, 24),
+        CardHover   = RGB(23, 18, 34),
+        Border      = RGB(34, 28, 48),
+        BorderHover = RGB(92, 70, 145),
+        Accent      = RGB(160, 120, 255),
+        AccentMuted = RGB(105, 75, 180),
+        Text        = RGB(240, 238, 250),
+        TextMuted   = RGB(150, 142, 170),
+        TextDull    = RGB(88, 80, 105),
+    },
+    ["Crimson Pulse"] = {
+        Bg          = RGB(12, 7, 8),
+        Sidebar     = RGB(16, 9, 11),
+        Card        = RGB(22, 12, 14),
+        CardHover   = RGB(31, 16, 19),
+        Border      = RGB(44, 24, 28),
+        BorderHover = RGB(115, 52, 60),
+        Accent      = RGB(240, 80, 100),
+        AccentMuted = RGB(160, 50, 68),
+        Text        = RGB(250, 238, 240),
+        TextMuted   = RGB(170, 140, 145),
+        TextDull    = RGB(105, 80, 85),
+    },
 }
 
-local ThemeOrder = { "Pitch Dark", "Graphite", "Obsidian Gold", "Cyber Gold", "Midnight Gold" }
+local ThemeOrder = {
+    "Pitch Dark", "Graphite", "Obsidian Gold", "Cyber Gold",
+    "Midnight Gold", "Violet Nebula", "Crimson Pulse",
+}
 local CurrentThemeName = "Pitch Dark"
 local CurrentTheme = Themes[CurrentThemeName]
 
@@ -235,6 +275,75 @@ local function Pad(parent, t, b, l, r)
     })
 end
 
+--==================================================================
+-- DEPTH HELPERS (v1.3.0)
+--==================================================================
+local GLOW_IMAGE = "rbxassetid://6014261993" -- soft blur, reused as a colored glow
+
+local function AddGradient(parent, seq, rotation)
+    return New("UIGradient", {
+        Color = seq or ColorSequence.new(Color3.new(1, 1, 1)),
+        Rotation = rotation or 0,
+        Parent = parent,
+    })
+end
+
+-- Returns a multiplier Color3 such that `base * Mul(toward, base)` ~= `toward`.
+-- UIGradient colors multiply the parent background, so this is how we make a
+-- surface fade from its lighter `base` colour down to a darker `toward` colour.
+local function Mul(toward, base)
+    local function ch(t, b)
+        if b <= 0 then return 1 end
+        return math.clamp(t / b, 0, 1)
+    end
+    return Color3.new(ch(toward.R, base.R), ch(toward.G, base.G), ch(toward.B, base.B))
+end
+
+local function AddGlow(parent, color, size, transparency, zindex)
+    return New("ImageLabel", {
+        Name = "KamiGlow",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = size or UDim2.fromScale(1.35, 1.35),
+        BackgroundTransparency = 1,
+        Image = GLOW_IMAGE,
+        ImageColor3 = color,
+        ImageTransparency = transparency == nil and 0.7 or transparency,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(49, 49, 450, 450),
+        ZIndex = zindex or 0,
+        Parent = parent,
+    })
+end
+
+-- thin animated-gradient highlight line across the top of a card
+local function CardSheen(frame)
+    local sheen = New("Frame", {
+        Name = "KamiSheen",
+        Size = UDim2.new(1, -2, 0, 1),
+        Position = UDim2.fromOffset(1, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.93,
+        BorderSizePixel = 0,
+        ZIndex = frame.ZIndex or 1,
+        Parent = frame,
+    })
+    local grad = AddGradient(sheen, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, CurrentTheme.Bg),
+        ColorSequenceKeypoint.new(0.5, CurrentTheme.Accent),
+        ColorSequenceKeypoint.new(1, CurrentTheme.Bg),
+    }))
+    return sheen, grad
+end
+
+local function AccentSeq()
+    return ColorSequence.new({
+        ColorSequenceKeypoint.new(0, CurrentTheme.Bg),
+        ColorSequenceKeypoint.new(0.5, CurrentTheme.Accent),
+        ColorSequenceKeypoint.new(1, CurrentTheme.Bg),
+    })
+end
+
 -- Sharp flash ripple (no round corners)
 local function Ripple(btn)
     local size = math.max(btn.AbsoluteSize.X, btn.AbsoluteSize.Y) * 1.6
@@ -302,7 +411,7 @@ function Kami:GetTheme() return CurrentThemeName, CurrentTheme end
 local BindingActive = false
 
 --==================================================================
--- LOADING SCREEN
+-- LOADING SCREEN  (v1.3.0 - rebuilt)
 --==================================================================
 local function Spaced(s)
     local out = (s:upper():gsub(".", "%0 "))
@@ -313,12 +422,13 @@ function Kami:ShowLoadingScreen(cfg)
     cfg = cfg or {}
     local steps = cfg.Steps or {
         "Initializing environment...",
-        "Validating client profile...",
-        "Rendering UI elements...",
-        "Done."
+        "Authenticating session...",
+        "Loading modules...",
+        "Building interface...",
+        "Ready.",
     }
     if #steps == 0 then steps = { "Loading..." } end
-    local duration = cfg.Duration or 2.2
+    local duration = cfg.Duration or 2.8
     local T = CurrentTheme
 
     local LoadGui = New("ScreenGui", {
@@ -330,43 +440,181 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = GetParent(),
     })
 
+    -- Backdrop (vertical gradient for depth)
     local Bg = New("Frame", {
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = T.Bg,
+        BackgroundColor3 = T.Bg:Lerp(T.Card, 0.45),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = LoadGui,
     })
+    AddGradient(Bg, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(0.6, Mul(T.Bg, T.Bg:Lerp(T.Card, 0.45))),
+        ColorSequenceKeypoint.new(1, Mul(T.Bg, T.Bg:Lerp(T.Card, 0.45))),
+    }), 90)
+
+    -- Drifting ambient glow
+    local Ambient = AddGlow(Bg, T.Accent, UDim2.new(0.85, 0, 0.85, 0), 0.95, 0)
+    Ambient.Position = UDim2.fromScale(0.5, 0.4)
+    TweenService:Create(Ambient, TweenInfo.new(3.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        ImageTransparency = 0.84,
+        Size = UDim2.new(1.0, 0, 1.0, 0),
+    }):Play()
+
+    -- HUD corner brackets
+    local bracketParts = {}
+    local function Bracket(anchorPoint, pos, horizontalAtTop, verticalAtLeft)
+        local holder = New("Frame", {
+            AnchorPoint = anchorPoint,
+            Position = pos,
+            Size = UDim2.fromOffset(26, 26),
+            BackgroundTransparency = 1,
+            Parent = Bg,
+        })
+        local hLine = New("Frame", {
+            Size = UDim2.new(1, 0, 0, 1),
+            Position = UDim2.new(0, 0, horizontalAtTop and 0 or 1, horizontalAtTop and 0 or -1),
+            BackgroundColor3 = T.Accent,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = holder,
+        })
+        local vLine = New("Frame", {
+            Size = UDim2.new(0, 1, 1, 0),
+            Position = UDim2.new(verticalAtLeft and 0 or 1, verticalAtLeft and 0 or -1, 0, 0),
+            BackgroundColor3 = T.Accent,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Parent = holder,
+        })
+        table.insert(bracketParts, hLine)
+        table.insert(bracketParts, vLine)
+    end
+    Bracket(Vector2.new(0, 0), UDim2.fromOffset(18, 18), true, true)
+    Bracket(Vector2.new(1, 0), UDim2.new(1, -18, 0, 18), true, false)
+    Bracket(Vector2.new(0, 1), UDim2.new(0, 18, 1, -18), false, true)
+    Bracket(Vector2.new(1, 1), UDim2.new(1, -18, 1, -18), false, false)
+
+    -- Floating particles
+    task.spawn(function()
+        local rng = Random.new()
+        while LoadGui.Parent do
+            local dot = New("Frame", {
+                Position = UDim2.new(rng:NextNumber(), 0, 1.02, 0),
+                Size = UDim2.fromOffset(rng:NextInteger(1, 2), rng:NextInteger(1, 2)),
+                BackgroundColor3 = CurrentTheme.Accent,
+                BackgroundTransparency = rng:NextNumber(0.45, 0.8),
+                BorderSizePixel = 0,
+                Parent = Bg,
+            })
+            local dur = rng:NextNumber(3.2, 6.5)
+            Tween(dot, dur, {
+                Position = UDim2.new(dot.Position.X.Scale, 0, -0.05, 0),
+                BackgroundTransparency = 1,
+            }, Enum.EasingStyle.Linear)
+            task.delay(dur, function() dot:Destroy() end)
+            task.wait(rng:NextNumber(0.1, 0.32))
+        end
+    end)
 
     local Center = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 14),
-        Size = UDim2.fromOffset(320, 190),
+        Position = UDim2.new(0.5, 0, 0.5, 12),
+        Size = UDim2.fromOffset(340, 220),
         BackgroundTransparency = 1,
         Parent = Bg,
     })
-    local CenterScale = New("UIScale", { Scale = 0.96, Parent = Center })
+    local CenterScale = New("UIScale", { Scale = 0.9, Parent = Center })
+
+    local centerY = 46
+
+    -- Glow behind the mark
+    local MarkGlow = AddGlow(Center, T.Accent, UDim2.fromOffset(124, 124), 0.6)
+    MarkGlow.Position = UDim2.new(0.5, 0, 0, centerY)
+    TweenService:Create(MarkGlow, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        ImageTransparency = 0.8,
+    }):Play()
+
+    -- Rotating HUD rings
+    local RingOuter = New("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0, centerY),
+        Size = UDim2.fromOffset(92, 92),
+        BackgroundTransparency = 1,
+        Parent = Center,
+    })
+    local roStroke = Stroke(RingOuter, T.Accent, 1, 1)
+    AddGradient(roStroke, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.Accent),
+        ColorSequenceKeypoint.new(0.5, T.AccentMuted),
+        ColorSequenceKeypoint.new(1, T.Accent),
+    }))
+
+    local RingInner = New("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0, centerY),
+        Size = UDim2.fromOffset(74, 74),
+        Rotation = 45,
+        BackgroundTransparency = 1,
+        Parent = Center,
+    })
+    local riStroke = Stroke(RingInner, T.Accent, 1, 1)
+    AddGradient(riStroke, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(0.5, T.Accent),
+        ColorSequenceKeypoint.new(1, T.AccentMuted),
+    }))
+
+    -- Orbiting accent dots
+    local Orbit = New("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0, centerY),
+        Size = UDim2.fromOffset(0, 0),
+        BackgroundTransparency = 1,
+        Parent = Center,
+    })
+    local orbits = {}
+    for i = 1, 3 do
+        local d = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.fromOffset(i == 1 and 5 or 4, i == 1 and 5 or 4),
+            BackgroundColor3 = T.Accent,
+            BorderSizePixel = 0,
+            Parent = Orbit,
+        })
+        table.insert(orbits, {
+            Dot = d,
+            Radius = 38 + i * 6,
+            Speed = (1.6 + i * 0.5) * (i % 2 == 0 and -1 or 1),
+            Phase = (i - 1) * 2.1,
+        })
+    end
+
+    local orbitConn = RunService.RenderStepped:Connect(function()
+        local t = os.clock()
+        for _, o in ipairs(orbits) do
+            local a = t * o.Speed + o.Phase
+            o.Dot.Position = UDim2.fromOffset(math.cos(a) * o.Radius, math.sin(a) * o.Radius)
+        end
+    end)
 
     -- Logo mark w/ rotating border shine
     local Mark = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 6),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0, centerY),
         Size = UDim2.fromOffset(56, 56),
         BackgroundColor3 = T.Card,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = Center,
     })
-    Corner(Mark, 12)
     local MarkStroke = Stroke(Mark, Color3.new(1, 1, 1), 1.2, 1)
-    local MarkGrad = New("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, T.Border),
-            ColorSequenceKeypoint.new(0.5, T.Accent),
-            ColorSequenceKeypoint.new(1, T.Border),
-        }),
-        Parent = MarkStroke,
-    })
+    local MarkGrad = AddGradient(MarkStroke, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.Border),
+        ColorSequenceKeypoint.new(0.5, T.Accent),
+        ColorSequenceKeypoint.new(1, T.Border),
+    }))
     local KLogo = New("TextLabel", {
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
@@ -379,7 +627,7 @@ function Kami:ShowLoadingScreen(cfg)
     })
 
     local Title = New("TextLabel", {
-        Position = UDim2.fromOffset(0, 80),
+        Position = UDim2.fromOffset(0, 92),
         Size = UDim2.new(1, 0, 0, 16),
         BackgroundTransparency = 1,
         Text = Spaced(cfg.Title or "KAMI UI"),
@@ -391,7 +639,7 @@ function Kami:ShowLoadingScreen(cfg)
     })
 
     local Status = New("TextLabel", {
-        Position = UDim2.fromOffset(0, 102),
+        Position = UDim2.fromOffset(0, 112),
         Size = UDim2.new(1, 0, 0, 14),
         BackgroundTransparency = 1,
         Text = steps[1],
@@ -404,13 +652,12 @@ function Kami:ShowLoadingScreen(cfg)
 
     local BarBg = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 138),
-        Size = UDim2.new(0, 0, 0, 2),
+        Position = UDim2.new(0.5, 0, 0, 140),
+        Size = UDim2.new(0, 0, 0, 3),
         BackgroundColor3 = T.Border,
         BorderSizePixel = 0,
         Parent = Center,
     })
-    Corner(BarBg, 2)
 
     local BarFill = New("Frame", {
         Size = UDim2.new(0, 0, 1, 0),
@@ -418,19 +665,26 @@ function Kami:ShowLoadingScreen(cfg)
         BorderSizePixel = 0,
         Parent = BarBg,
     })
-    Corner(BarFill, 2)
-    local BarGrad = New("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, T.AccentMuted),
-            ColorSequenceKeypoint.new(0.5, T.Accent),
-            ColorSequenceKeypoint.new(1, T.AccentMuted),
-        }),
-        Offset = Vector2.new(-1, 0),
+    local BarGrad = AddGradient(BarFill, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(0.5, T.Accent),
+        ColorSequenceKeypoint.new(1, T.AccentMuted),
+    }))
+    BarGrad.Offset = Vector2.new(-1, 0)
+
+    local BarHead = New("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(7, 7),
+        Rotation = 45,
+        BackgroundColor3 = T.Accent,
+        BorderSizePixel = 0,
+        ZIndex = 2,
         Parent = BarFill,
     })
 
     local Percent = New("TextLabel", {
-        Position = UDim2.fromOffset(0, 148),
+        Position = UDim2.fromOffset(0, 150),
         Size = UDim2.new(1, 0, 0, 12),
         BackgroundTransparency = 1,
         Text = "0%",
@@ -450,10 +704,19 @@ function Kami:ShowLoadingScreen(cfg)
     Tween(KLogo, 0.5, { TextTransparency = 0 })
     Tween(Status, 0.5, { TextTransparency = 0 })
     Tween(Percent, 0.5, { TextTransparency = 0 })
-    Tween(BarBg, 0.6, { Size = UDim2.new(0, 220, 0, 2) })
+    Tween(BarBg, 0.6, { Size = UDim2.new(0, 240, 0, 3) })
+    for _, part in ipairs(bracketParts) do
+        Tween(part, 0.7, { BackgroundTransparency = 0.25 })
+    end
+    Tween(roStroke, 0.6, { Transparency = 0.25 })
+    Tween(riStroke, 0.7, { Transparency = 0.35 })
 
-    local spin = TweenService:Create(MarkGrad, TweenInfo.new(2.4, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
-    spin:Play()
+    local spinOuter = TweenService:Create(RingOuter, TweenInfo.new(7, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
+    spinOuter:Play()
+    local spinInner = TweenService:Create(RingInner, TweenInfo.new(4.5, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = -360 })
+    spinInner:Play()
+    local spinMark = TweenService:Create(MarkGrad, TweenInfo.new(2.4, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
+    spinMark:Play()
     local shimmer = TweenService:Create(BarGrad, TweenInfo.new(1.2, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Offset = Vector2.new(1, 0) })
     shimmer:Play()
 
@@ -492,6 +755,8 @@ function Kami:ShowLoadingScreen(cfg)
     -- Outro
     Tween(CenterScale, 0.35, { Scale = 1.04 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
     Tween(Bg, 0.4, { BackgroundTransparency = 1 })
+    Tween(Ambient, 0.3, { ImageTransparency = 1 })
+    Tween(MarkGlow, 0.3, { ImageTransparency = 1 })
     Tween(Mark, 0.25, { BackgroundTransparency = 1 })
     Tween(MarkStroke, 0.25, { Transparency = 1 })
     for _, lbl in ipairs({ KLogo, Title, Status, Percent }) do
@@ -499,10 +764,16 @@ function Kami:ShowLoadingScreen(cfg)
     end
     Tween(BarBg, 0.25, { BackgroundTransparency = 1 })
     Tween(BarFill, 0.25, { BackgroundTransparency = 1 })
+    Tween(BarHead, 0.25, { BackgroundTransparency = 1 })
+    Tween(roStroke, 0.3, { Transparency = 1 })
+    Tween(riStroke, 0.3, { Transparency = 1 })
+    for _, o in ipairs(orbits) do Tween(o.Dot, 0.25, { BackgroundTransparency = 1 }) end
+    for _, part in ipairs(bracketParts) do Tween(part, 0.3, { BackgroundTransparency = 1 }) end
 
     task.wait(0.42)
-    spin:Cancel(); shimmer:Cancel()
+    spinOuter:Cancel(); spinInner:Cancel(); spinMark:Cancel(); shimmer:Cancel()
     pctConn:Disconnect()
+    orbitConn:Disconnect()
     LoadGui:Destroy()
 end
 
@@ -696,15 +967,24 @@ function Kami:Notify(cfg)
     })
     Corner(card, 6)
     Stroke(card, T.Border)
+    local sheen, sheenGrad = CardSheen(card)
+    sheen.Size = UDim2.new(1, 0, 0, 1)
+    sheen.Position = UDim2.fromOffset(0, 0)
+    sheen.BackgroundTransparency = 0.88
 
-    -- left accent line
-    New("Frame", {
+    -- left accent line (now a gradient)
+    local accentLine = New("Frame", {
         Size = UDim2.new(0, 2, 1, -16),
         Position = UDim2.fromOffset(0, 8),
         BackgroundColor3 = T.Accent,
         BorderSizePixel = 0,
         Parent = card,
     })
+    local accentGrad = AddGradient(accentLine, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(0.5, T.Accent),
+        ColorSequenceKeypoint.new(1, T.AccentMuted),
+    }), 90)
 
     local body = New("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
@@ -805,7 +1085,7 @@ function Kami:Notify(cfg)
         end)
     end
 
-    -- timer bar
+    -- timer bar (gradient)
     local timer = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 0, 1, 0),
@@ -815,6 +1095,10 @@ function Kami:Notify(cfg)
         BorderSizePixel = 0,
         Parent = card,
     })
+    AddGradient(timer, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(1, T.Accent),
+    }))
 
     local function Fit()
         if closed then return end
@@ -887,7 +1171,7 @@ function Kami:CreateWindow(cfg)
         end
     end)
 
-    -- Holder (scaled / dragged) -> Shadow + MainFrame
+    -- Holder (scaled / dragged) -> Glow + Shadow + MainFrame
     local Holder = New("Frame", {
         Name = "Kami_Holder",
         Size = winSize,
@@ -897,6 +1181,9 @@ function Kami:CreateWindow(cfg)
         Parent = Screen,
     })
     local HolderScale = New("UIScale", { Scale = 0.94, Parent = Holder })
+
+    -- Ambient glow behind the whole window (v1.3.0)
+    local WindowGlow = AddGlow(Holder, CurrentTheme.Accent, UDim2.new(1, 72, 1, 72), 1, 0)
 
     local Shadow = New("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -915,7 +1202,7 @@ function Kami:CreateWindow(cfg)
     local MainFrame = New("Frame", {
         Name = "Kami_Main",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = CurrentTheme.Bg,
+        BackgroundColor3 = CurrentTheme.Bg:Lerp(CurrentTheme.Card, 0.5),
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 1,
@@ -923,6 +1210,12 @@ function Kami:CreateWindow(cfg)
     })
     Corner(MainFrame, 8)
     local MainStroke = Stroke(MainFrame, CurrentTheme.Border)
+    -- vertical depth gradient (slightly lifted top, fading to Bg)
+    local MainGrad = AddGradient(MainFrame, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(0.45, Mul(CurrentTheme.Bg, CurrentTheme.Bg:Lerp(CurrentTheme.Card, 0.5))),
+        ColorSequenceKeypoint.new(1, Mul(CurrentTheme.Bg, CurrentTheme.Bg:Lerp(CurrentTheme.Card, 0.5))),
+    }), 90)
 
     -- Fade veil (gives the window a "fade" without CanvasGroup)
     local Veil = New("Frame", {
@@ -936,9 +1229,15 @@ function Kami:CreateWindow(cfg)
     Corner(Veil, 8)
 
     RegisterPaint(function()
-        MainFrame.BackgroundColor3 = CurrentTheme.Bg
+        MainFrame.BackgroundColor3 = CurrentTheme.Bg:Lerp(CurrentTheme.Card, 0.5)
         MainStroke.Color = CurrentTheme.Border
         Veil.BackgroundColor3 = CurrentTheme.Bg
+        WindowGlow.ImageColor3 = CurrentTheme.Accent
+        MainGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(0.45, Mul(CurrentTheme.Bg, CurrentTheme.Bg:Lerp(CurrentTheme.Card, 0.5))),
+            ColorSequenceKeypoint.new(1, Mul(CurrentTheme.Bg, CurrentTheme.Bg:Lerp(CurrentTheme.Card, 0.5))),
+        })
     end)
 
     --================ HEADER ================
@@ -946,19 +1245,35 @@ function Kami:CreateWindow(cfg)
     local Header = New("Frame", {
         Name = "Header",
         Size = UDim2.new(1, 0, 0, HEADER_H),
-        BackgroundColor3 = CurrentTheme.Sidebar,
+        BackgroundColor3 = CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.7),
         BorderSizePixel = 0,
         Parent = MainFrame,
     })
+    local HeaderGrad = AddGradient(Header, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Mul(CurrentTheme.Sidebar, CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.7))),
+    }), 90)
+
     local HeaderLine = New("Frame", {
         Size = UDim2.new(1, 0, 0, 1),
         Position = UDim2.new(0, 0, 1, -1),
-        BackgroundColor3 = CurrentTheme.Border,
+        BackgroundColor3 = CurrentTheme.AccentMuted,
         BorderSizePixel = 0,
         Parent = Header,
     })
+    local HeaderLineGrad = AddGradient(HeaderLine, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 45)),
+        ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 45)),
+    }))
+    HeaderLineGrad.Offset = Vector2.new(-1, 0)
+    TweenService:Create(
+        HeaderLineGrad,
+        TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true),
+        { Offset = Vector2.new(1, 0) }
+    ):Play()
 
-    -- Accent bar (replaces K logo mark)
+    -- Accent bar (replaces K logo mark) with its own gradient
     local AccentBar = New("Frame", {
         Size = UDim2.new(0, 2, 1, -16),
         Position = UDim2.fromOffset(12, 8),
@@ -966,6 +1281,11 @@ function Kami:CreateWindow(cfg)
         BorderSizePixel = 0,
         Parent = Header,
     })
+    local AccentBarGrad = AddGradient(AccentBar, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 120, 120)),
+        ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 120, 120)),
+    }), 90)
 
     local TitleName = New("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
@@ -1001,7 +1321,7 @@ function Kami:CreateWindow(cfg)
     TitleName:GetPropertyChangedSignal("TextBounds"):Connect(LayoutTitle)
     LayoutTitle()
 
-    -- Right controls cluster: Crumb · Min · Close (fixed gaps, vertically centered)
+    -- Right controls cluster: Crumb · Min · Close
     local RightCluster = New("Frame", {
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -10, 0.5, 0),
@@ -1063,9 +1383,23 @@ function Kami:CreateWindow(cfg)
     local CloseBtn = HeaderBtn("×", 15, 3)
 
     RegisterPaint(function()
-        Header.BackgroundColor3 = CurrentTheme.Sidebar
-        HeaderLine.BackgroundColor3 = CurrentTheme.Border
+        Header.BackgroundColor3 = CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.7)
+        HeaderLine.BackgroundColor3 = CurrentTheme.AccentMuted
+        HeaderLineGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 45)),
+            ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 45)),
+        })
+        HeaderGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Mul(CurrentTheme.Sidebar, CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.7))),
+        })
         AccentBar.BackgroundColor3 = CurrentTheme.Accent
+        AccentBarGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 120, 120)),
+            ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 120, 120)),
+        })
         TitleName.TextColor3 = CurrentTheme.Text
         TitleSub.TextColor3 = CurrentTheme.TextDull
         Crumb.TextColor3 = CurrentTheme.TextDull
@@ -1091,6 +1425,7 @@ function Kami:CreateWindow(cfg)
             HolderScale.Scale = 0.94
             Tween(HolderScale, 0.4, { Scale = 1 }, Enum.EasingStyle.Back)
             Tween(Shadow, 0.4, { ImageTransparency = 0.45 })
+            Tween(WindowGlow, 0.45, { ImageTransparency = 0.86 })
             Tween(Veil, 0.35, { BackgroundTransparency = 1 })
             task.delay(0.36, function() if Window.Visible then Veil.Visible = false end end)
         else
@@ -1098,6 +1433,7 @@ function Kami:CreateWindow(cfg)
             Tween(Veil, 0.16, { BackgroundTransparency = 0 })
             Tween(HolderScale, 0.22, { Scale = 0.94 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
             Tween(Shadow, 0.2, { ImageTransparency = 1 })
+            Tween(WindowGlow, 0.2, { ImageTransparency = 1 })
             task.delay(0.22, function() if not Window.Visible then Holder.Visible = false end end)
         end
     end
@@ -1138,6 +1474,7 @@ function Kami:CreateWindow(cfg)
     task.defer(function()
         Tween(HolderScale, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
         Tween(Shadow, 0.5, { ImageTransparency = 0.45 })
+        Tween(WindowGlow, 0.55, { ImageTransparency = 0.86 })
         Tween(Veil, 0.45, { BackgroundTransparency = 1 })
         task.delay(0.46, function() if Window.Visible then Veil.Visible = false end end)
     end)
@@ -1174,10 +1511,15 @@ function Kami:CreateWindow(cfg)
     local Sidebar = New("Frame", {
         Size = UDim2.new(0, SIDEBAR_W, 1, -HEADER_H),
         Position = UDim2.fromOffset(0, HEADER_H),
-        BackgroundColor3 = CurrentTheme.Sidebar,
+        BackgroundColor3 = CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.5),
         BorderSizePixel = 0,
         Parent = MainFrame,
     })
+    local SideGrad = AddGradient(Sidebar, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Mul(CurrentTheme.Sidebar, CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.5))),
+    }), 90)
+
     local SidebarBorder = New("Frame", {
         Size = UDim2.new(0, 1, 1, 0),
         Position = UDim2.new(1, -1, 0, 0),
@@ -1243,12 +1585,16 @@ function Kami:CreateWindow(cfg)
     })
 
     RegisterPaint(function()
-        Sidebar.BackgroundColor3 = CurrentTheme.Sidebar
+        Sidebar.BackgroundColor3 = CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.5)
         SidebarBorder.BackgroundColor3 = CurrentTheme.Border
         NavLabel.TextColor3 = CurrentTheme.TextDull
         FooterLine.BackgroundColor3 = CurrentTheme.Border
         StatusDot.BackgroundColor3 = CurrentTheme.Accent
         Footer.TextColor3 = CurrentTheme.TextDull
+        SideGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Mul(CurrentTheme.Sidebar, CurrentTheme.Sidebar:Lerp(CurrentTheme.Card, 0.5))),
+        })
     end)
 
     local ContentHolder = New("Frame", {
@@ -1423,6 +1769,10 @@ function Kami:CreateWindow(cfg)
             Parent = NavScroll,
         })
         Corner(TabBtn, 5)
+        local TabGrad = AddGradient(TabBtn, ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(205, 205, 212)),
+        }), 0)
         local TabStroke = Stroke(TabBtn, CurrentTheme.Border, 1, 1)
 
         local TabIndicator = New("Frame", {
@@ -1569,18 +1919,40 @@ function Kami:CreateWindow(cfg)
             Corner(row, 5)
             local st = Stroke(row, CurrentTheme.Border)
 
+            -- subtle vertical depth
+            AddGradient(row, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(228, 228, 232)),
+            }), 90)
+
+            local sheen, sheenGrad = CardSheen(row)
+            local pip = New("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
+                Size = UDim2.new(0, 2, 0, 0),
+                BackgroundColor3 = CurrentTheme.Accent,
+                BorderSizePixel = 0,
+                Parent = row,
+            })
+
             RegisterPaint(function()
                 row.BackgroundColor3 = CurrentTheme.Card
                 st.Color = CurrentTheme.Border
+                pip.BackgroundColor3 = CurrentTheme.Accent
+                sheenGrad.Color = AccentSeq()
             end)
 
             row.MouseEnter:Connect(function()
                 Tween(st, 0.2, { Color = CurrentTheme.BorderHover })
                 Tween(row, 0.2, { BackgroundColor3 = CurrentTheme.CardHover })
+                Tween(pip, 0.28, { Size = UDim2.new(0, 2, 0.55, 0) }, Enum.EasingStyle.Back)
+                Tween(sheen, 0.25, { BackgroundTransparency = 0.68 })
             end)
             row.MouseLeave:Connect(function()
                 Tween(st, 0.2, { Color = CurrentTheme.Border })
                 Tween(row, 0.2, { BackgroundColor3 = CurrentTheme.Card })
+                Tween(pip, 0.25, { Size = UDim2.new(0, 2, 0, 0) })
+                Tween(sheen, 0.25, { BackgroundTransparency = 0.93 })
             end)
 
             return row, st
@@ -1639,8 +2011,13 @@ function Kami:CreateWindow(cfg)
             })
             Corner(card, 6)
             local cStroke = Stroke(card, Color3.new(1, 1, 1))
-            local cGrad = New("UIGradient", { Parent = cStroke })
+            local cGrad = AddGradient(cStroke, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, CurrentTheme.Border),
+                ColorSequenceKeypoint.new(0.5, CurrentTheme.AccentMuted),
+                ColorSequenceKeypoint.new(1, CurrentTheme.Border),
+            }))
             TweenService:Create(cGrad, TweenInfo.new(6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 }):Play()
+            local _, sheenGrad = CardSheen(card)
 
             local avatarImg = New("ImageLabel", {
                 AnchorPoint = Vector2.new(0, 0.5),
@@ -1741,6 +2118,7 @@ function Kami:CreateWindow(cfg)
                     ColorSequenceKeypoint.new(0.5, CurrentTheme.AccentMuted),
                     ColorSequenceKeypoint.new(1, CurrentTheme.Border),
                 })
+                sheenGrad.Color = AccentSeq()
                 avatarImg.BackgroundColor3 = CurrentTheme.Bg
                 aStroke.Color = CurrentTheme.BorderHover
                 dName.TextColor3 = CurrentTheme.Text
@@ -1772,6 +2150,7 @@ function Kami:CreateWindow(cfg)
                 Parent = Page,
             })
             local cStroke = Stroke(card, CurrentTheme.Border)
+            local _, sheenGrad = CardSheen(card)
 
             local iconImg = New("ImageLabel", {
                 AnchorPoint = Vector2.new(0, 0.5),
@@ -1867,6 +2246,7 @@ function Kami:CreateWindow(cfg)
             RegisterPaint(function()
                 card.BackgroundColor3 = CurrentTheme.Card
                 cStroke.Color = CurrentTheme.Border
+                sheenGrad.Color = AccentSeq()
                 iconImg.BackgroundColor3 = CurrentTheme.Bg
                 gName.TextColor3 = CurrentTheme.Text
                 gPlayers.TextColor3 = CurrentTheme.TextMuted
@@ -1912,6 +2292,7 @@ function Kami:CreateWindow(cfg)
                 })
                 Corner(sCard, 5)
                 local sStroke = Stroke(sCard, CurrentTheme.Border)
+                local _, sheenGrad = CardSheen(sCard)
 
                 local sKey = New("TextLabel", {
                     Position = UDim2.fromOffset(12, 8),
@@ -1952,6 +2333,7 @@ function Kami:CreateWindow(cfg)
                 RegisterPaint(function()
                     sCard.BackgroundColor3 = CurrentTheme.Card
                     sStroke.Color = CurrentTheme.Border
+                    sheenGrad.Color = AccentSeq()
                     sKey.TextColor3 = CurrentTheme.TextDull
                     sVal.TextColor3 = CurrentTheme.Text
                 end)
@@ -1991,16 +2373,17 @@ function Kami:CreateWindow(cfg)
             })
 
             local sLine = New("Frame", {
-                BackgroundColor3 = CurrentTheme.BorderHover,
+                BackgroundColor3 = CurrentTheme.Accent,
                 BorderSizePixel = 0,
                 Parent = sHolder,
             })
-            New("UIGradient", {
-                Transparency = NumberSequence.new({
-                    NumberSequenceKeypoint.new(0, 0),
-                    NumberSequenceKeypoint.new(1, 1),
-                }),
-                Parent = sLine,
+            local sLineGrad = AddGradient(sLine, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 90, 90)),
+            }))
+            sLineGrad.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 1),
             })
 
             local function Layout()
@@ -2013,7 +2396,7 @@ function Kami:CreateWindow(cfg)
 
             RegisterPaint(function()
                 sText.TextColor3 = CurrentTheme.TextMuted
-                sLine.BackgroundColor3 = CurrentTheme.BorderHover
+                sLine.BackgroundColor3 = CurrentTheme.Accent
             end)
 
             local obj = {}
@@ -2062,6 +2445,7 @@ function Kami:CreateWindow(cfg)
             })
             Corner(pRow, 5)
             local pStroke = Stroke(pRow, CurrentTheme.Border)
+            local _, sheenGrad = CardSheen(pRow)
             Pad(pRow, 10, 10, 14, 14)
             New("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = pRow })
 
@@ -2097,6 +2481,7 @@ function Kami:CreateWindow(cfg)
             RegisterPaint(function()
                 pRow.BackgroundColor3 = CurrentTheme.Card
                 pStroke.Color = CurrentTheme.Border
+                sheenGrad.Color = AccentSeq()
                 pt.TextColor3 = CurrentTheme.Text
                 pc.TextColor3 = CurrentTheme.TextMuted
             end)
@@ -2213,8 +2598,12 @@ function Kami:CreateWindow(cfg)
             Corner(bAction, 4)
             Pad(bAction, 0, 0, 14, 14)
             local bStroke = Stroke(bAction, CurrentTheme.BorderHover)
+            -- depth gradient on the action button
+            AddGradient(bAction, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(222, 222, 228)),
+            }), 90)
 
-            -- arrow that slides in on hover
             local hovering = false
             RegisterPaint(function()
                 bAction.BackgroundColor3 = hovering and CurrentTheme.Accent or CurrentTheme.Bg
@@ -2326,6 +2715,10 @@ function Kami:CreateWindow(cfg)
                 Parent = track,
             })
             Corner(fill, 999)
+            local fillGrad = AddGradient(fill, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+                ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+            }), 0)
 
             local knob = New("Frame", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2398,6 +2791,10 @@ function Kami:CreateWindow(cfg)
                 vStroke.Color = CurrentTheme.Border
                 track.BackgroundColor3 = CurrentTheme.Border
                 fill.BackgroundColor3 = CurrentTheme.Accent
+                fillGrad.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+                    ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+                })
                 knob.BackgroundColor3 = CurrentTheme.Accent
                 kStroke.Color = CurrentTheme.Card
             end)
