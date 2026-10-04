@@ -1,16 +1,17 @@
 --[[
-    KAMI UI - v1.2.0
+    KAMI UI - v1.2.1
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
 
     Features:
       - Pitch Dark default theme (+ Obsidian Gold, Cyber Gold, Midnight Gold, Graphite)
       - Sharp rect aesthetic (no UICorner)
+      - Accent-bar header + clean dual-label title (no RichText ghosting)
       - Smooth animations: window open/close, collapse, tab slide, ripples,
         toggle/slider/dropdown motion, sliding notifications w/ timer bar
       - Custom tab icons via rbxassetid / number / built-in name
-      - Profile card, stat grid (live telemetry), section, paragraph, label
+      - Profile card, game card, stat grid, section, paragraph, label
       - Toggle, Button, Slider, Dropdown (multi + search), ColorPicker, Input, Keybind
-      - Window:Destroy() + adaptive mobile window sizing
+      - Scrollable = false tabs + Window:Destroy() + adaptive mobile sizing
       - Post-loading Discord invite prompt
       - Live theme switching + Config manager (save / load / delete / auto-load)
       - Floating toggle button on touch devices
@@ -23,7 +24,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.2.0"
+    Version = "1.2.1"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -941,9 +942,10 @@ function Kami:CreateWindow(cfg)
     end)
 
     --================ HEADER ================
+    local HEADER_H = 40
     local Header = New("Frame", {
         Name = "Header",
-        Size = UDim2.new(1, 0, 0, 38),
+        Size = UDim2.new(1, 0, 0, HEADER_H),
         BackgroundColor3 = CurrentTheme.Sidebar,
         BorderSizePixel = 0,
         Parent = MainFrame,
@@ -956,55 +958,82 @@ function Kami:CreateWindow(cfg)
         Parent = Header,
     })
 
-    local LogoMark = New("Frame", {
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 14, 0.5, 0),
-        Size = UDim2.fromOffset(18, 18),
+    -- Accent bar (replaces K logo mark)
+    local AccentBar = New("Frame", {
+        Size = UDim2.new(0, 2, 1, -16),
+        Position = UDim2.fromOffset(12, 8),
         BackgroundColor3 = CurrentTheme.Accent,
         BorderSizePixel = 0,
         Parent = Header,
     })
-    Corner(LogoMark, 5)
-    local LogoK = New("TextLabel", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Text = "K",
-        Font = Enum.Font.GothamBold,
-        TextSize = 11,
-        TextColor3 = CurrentTheme.Bg,
-        Parent = LogoMark,
-    })
 
-    local TitleLabel = New("TextLabel", {
-        Position = UDim2.fromOffset(42, 0),
-        Size = UDim2.new(0.5, -42, 1, 0),
+    local TitleName = New("TextLabel", {
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 24, 0.5, 0),
+        Size = UDim2.fromOffset(0, 18),
+        AutomaticSize = Enum.AutomaticSize.X,
         BackgroundTransparency = 1,
-        RichText = true,
-        Font = Enum.Font.Gotham,
-        TextSize = 11,
+        Text = winName:upper(),
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
         TextColor3 = CurrentTheme.Text,
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = Header,
+    })
+
+    local TitleSub = New("TextLabel", {
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 24, 0.5, 0),
+        Size = UDim2.fromOffset(0, 18),
+        AutomaticSize = Enum.AutomaticSize.X,
+        BackgroundTransparency = 1,
+        Text = "/  " .. winSub,
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        TextColor3 = CurrentTheme.TextDull,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = Header,
+    })
+
+    local function LayoutTitle()
+        TitleSub.Position = UDim2.new(0, 24 + TitleName.TextBounds.X + 8, 0.5, 0)
+    end
+    TitleName:GetPropertyChangedSignal("TextBounds"):Connect(LayoutTitle)
+    LayoutTitle()
+
+    -- Right controls cluster: Crumb · Min · Close (fixed gaps, vertically centered)
+    local RightCluster = New("Frame", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -10, 0.5, 0),
+        Size = UDim2.fromOffset(0, 22),
+        AutomaticSize = Enum.AutomaticSize.X,
+        BackgroundTransparency = 1,
+        Parent = Header,
+    })
+    New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Right,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, 8),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = RightCluster,
     })
 
     local Crumb = New("TextLabel", {
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -78, 0, 0),
-        Size = UDim2.new(0.4, 0, 1, 0),
+        Size = UDim2.fromOffset(0, 22),
+        AutomaticSize = Enum.AutomaticSize.X,
         BackgroundTransparency = 1,
         Text = "",
-        Font = Enum.Font.Gotham,
+        Font = Enum.Font.GothamMedium,
         TextSize = 10,
         TextColor3 = CurrentTheme.TextDull,
         TextXAlignment = Enum.TextXAlignment.Right,
-        Parent = Header,
+        LayoutOrder = 1,
+        Parent = RightCluster,
     })
 
-    local function HeaderBtn(txt, xOff, size)
+    local function HeaderBtn(txt, size, order)
         local b = New("TextButton", {
-            AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, xOff, 0.5, 0),
             Size = UDim2.fromOffset(26, 22),
             BackgroundColor3 = CurrentTheme.CardHover,
             BackgroundTransparency = 1,
@@ -1014,9 +1043,9 @@ function Kami:CreateWindow(cfg)
             TextSize = size or 12,
             TextColor3 = CurrentTheme.TextMuted,
             AutoButtonColor = false,
-            Parent = Header,
+            LayoutOrder = order,
+            Parent = RightCluster,
         })
-        Corner(b, 4)
         b.MouseEnter:Connect(function()
             Tween(b, 0.15, { BackgroundTransparency = 0, TextColor3 = CurrentTheme.Text })
         end)
@@ -1030,24 +1059,19 @@ function Kami:CreateWindow(cfg)
         return b
     end
 
-    local CloseBtn = HeaderBtn("×", -8, 15)
-    local MinBtn = HeaderBtn("—", -38, 10)
-
-    local function PaintTitle()
-        TitleLabel.Text = string.format(
-            '<b>%s</b>  <font color="#%s">/  %s</font>',
-            winName:upper(), CurrentTheme.TextDull:ToHex(), winSub
-        )
-    end
+    local MinBtn = HeaderBtn("—", 10, 2)
+    local CloseBtn = HeaderBtn("×", 15, 3)
 
     RegisterPaint(function()
         Header.BackgroundColor3 = CurrentTheme.Sidebar
         HeaderLine.BackgroundColor3 = CurrentTheme.Border
-        LogoMark.BackgroundColor3 = CurrentTheme.Accent
-        LogoK.TextColor3 = CurrentTheme.Bg
-        TitleLabel.TextColor3 = CurrentTheme.Text
+        AccentBar.BackgroundColor3 = CurrentTheme.Accent
+        TitleName.TextColor3 = CurrentTheme.Text
+        TitleSub.TextColor3 = CurrentTheme.TextDull
         Crumb.TextColor3 = CurrentTheme.TextDull
-        PaintTitle()
+        TitleName.Text = winName:upper()
+        TitleSub.Text = "/  " .. winSub
+        LayoutTitle()
     end)
 
     --================ VISIBILITY / COLLAPSE ================
@@ -1085,7 +1109,7 @@ function Kami:CreateWindow(cfg)
         collapsed = state and true or false
         CloseDropdown()
         CloseColorPicker()
-        local target = collapsed and UDim2.new(winSize.X.Scale, winSize.X.Offset, 0, 38) or winSize
+        local target = collapsed and UDim2.new(winSize.X.Scale, winSize.X.Offset, 0, HEADER_H) or winSize
         Tween(Holder, 0.45, { Size = target })
         MinBtn.Text = collapsed and "+" or "—"
         MinBtn.TextSize = collapsed and 14 or 10
@@ -1148,8 +1172,8 @@ function Kami:CreateWindow(cfg)
     local SIDEBAR_W = isCompact and 110 or 150
 
     local Sidebar = New("Frame", {
-        Size = UDim2.new(0, SIDEBAR_W, 1, -38),
-        Position = UDim2.fromOffset(0, 38),
+        Size = UDim2.new(0, SIDEBAR_W, 1, -HEADER_H),
+        Position = UDim2.fromOffset(0, HEADER_H),
         BackgroundColor3 = CurrentTheme.Sidebar,
         BorderSizePixel = 0,
         Parent = MainFrame,
@@ -1228,8 +1252,8 @@ function Kami:CreateWindow(cfg)
     end)
 
     local ContentHolder = New("Frame", {
-        Size = UDim2.new(1, -SIDEBAR_W, 1, -38),
-        Position = UDim2.fromOffset(SIDEBAR_W, 38),
+        Size = UDim2.new(1, -SIDEBAR_W, 1, -HEADER_H),
+        Position = UDim2.fromOffset(SIDEBAR_W, HEADER_H),
         BackgroundTransparency = 1,
         ClipsDescendants = true,
         Parent = MainFrame,
@@ -1382,6 +1406,8 @@ function Kami:CreateWindow(cfg)
         opt = opt or {}
         local tabTitle = opt.Title or "Tab"
         local tabIcon = ResolveIcon(opt.Icon)
+        local scrollable = opt.Scrollable
+        if scrollable == nil then scrollable = true end
 
         local Tab = {}
         local index = #Window.Tabs + 1
@@ -1441,15 +1467,16 @@ function Kami:CreateWindow(cfg)
             Size = UDim2.fromScale(1, 1),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            ScrollBarThickness = 2,
+            ScrollBarThickness = scrollable and 2 or 0,
+            ScrollingEnabled = scrollable,
             ScrollBarImageColor3 = CurrentTheme.BorderHover,
             CanvasSize = UDim2.new(0, 0, 0, 0),
-            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            AutomaticCanvasSize = scrollable and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
             Visible = false,
             Parent = ContentHolder,
         })
-        New("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Page })
-        Pad(Page, 14, 14, 16, 16)
+        New("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Page })
+        Pad(Page, 16, 16, 16, 16)
 
         Page:GetPropertyChangedSignal("CanvasPosition"):Connect(CloseDropdown)
 
@@ -1733,12 +1760,135 @@ function Kami:CreateWindow(cfg)
         end
 
         ------------------------------------------------------------
+        -- Game Card (full-width place info)
+        ------------------------------------------------------------
+        function Tab:AddGameCard(c)
+            c = c or {}
+            local card = New("Frame", {
+                Size = UDim2.new(1, 0, 0, 64),
+                BackgroundColor3 = CurrentTheme.Card,
+                BorderSizePixel = 0,
+                LayoutOrder = NextOrder(),
+                Parent = Page,
+            })
+            local cStroke = Stroke(card, CurrentTheme.Border)
+
+            local iconImg = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Size = UDim2.fromOffset(44, 44),
+                Position = UDim2.new(0, 12, 0.5, 0),
+                BackgroundColor3 = CurrentTheme.Bg,
+                BorderSizePixel = 0,
+                Image = c.Image or "",
+                ScaleType = Enum.ScaleType.Crop,
+                Parent = card,
+            })
+            Stroke(iconImg, CurrentTheme.BorderHover)
+
+            local gName = New("TextLabel", {
+                Position = UDim2.fromOffset(68, 14),
+                Size = UDim2.new(1, -160, 0, 16),
+                BackgroundTransparency = 1,
+                Text = c.Name or "Unknown Game",
+                Font = Enum.Font.GothamBold,
+                TextSize = 13,
+                TextColor3 = CurrentTheme.Text,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Parent = card,
+            })
+
+            local gPlayers = New("TextLabel", {
+                Position = UDim2.fromOffset(68, 34),
+                Size = UDim2.new(1, -160, 0, 14),
+                BackgroundTransparency = 1,
+                Text = tostring(c.Players or "0") .. " Players",
+                Font = Enum.Font.Gotham,
+                TextSize = 10,
+                TextColor3 = CurrentTheme.TextMuted,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Parent = card,
+            })
+
+            -- Right status pill (live / online)
+            local status = New("Frame", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0),
+                Size = UDim2.fromOffset(0, 26),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundColor3 = CurrentTheme.Bg,
+                BorderSizePixel = 0,
+                Parent = card,
+            })
+            local stStroke = Stroke(status, CurrentTheme.Border)
+            Pad(status, 0, 0, 10, 12)
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 6),
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Parent = status,
+            })
+
+            local liveColor = Color3.fromRGB(60, 200, 120)
+            local liveDot = New("Frame", {
+                Size = UDim2.fromOffset(7, 7),
+                BackgroundColor3 = liveColor,
+                BorderSizePixel = 0,
+                LayoutOrder = 1,
+                Parent = status,
+            })
+            TweenService:Create(liveDot, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                BackgroundTransparency = 0.65,
+            }):Play()
+
+            local liveLbl = New("TextLabel", {
+                Size = UDim2.fromOffset(0, 26),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Text = c.Status or "LIVE",
+                Font = Enum.Font.GothamMedium,
+                TextSize = 9,
+                TextColor3 = liveColor,
+                LayoutOrder = 2,
+                Parent = status,
+            })
+
+            card.MouseEnter:Connect(function()
+                Tween(cStroke, 0.2, { Color = CurrentTheme.BorderHover })
+                Tween(card, 0.2, { BackgroundColor3 = CurrentTheme.CardHover })
+            end)
+            card.MouseLeave:Connect(function()
+                Tween(cStroke, 0.2, { Color = CurrentTheme.Border })
+                Tween(card, 0.2, { BackgroundColor3 = CurrentTheme.Card })
+            end)
+
+            RegisterPaint(function()
+                card.BackgroundColor3 = CurrentTheme.Card
+                cStroke.Color = CurrentTheme.Border
+                iconImg.BackgroundColor3 = CurrentTheme.Bg
+                gName.TextColor3 = CurrentTheme.Text
+                gPlayers.TextColor3 = CurrentTheme.TextMuted
+                status.BackgroundColor3 = CurrentTheme.Bg
+                stStroke.Color = CurrentTheme.Border
+            end)
+
+            local obj = {}
+            function obj:SetName(n) gName.Text = tostring(n) end
+            function obj:SetPlayers(n) gPlayers.Text = tostring(n) .. " Players" end
+            function obj:SetImage(s) iconImg.Image = tostring(s) end
+            function obj:SetStatus(s) liveLbl.Text = tostring(s) end
+            return obj
+        end
+
+        ------------------------------------------------------------
         -- Stat Grid
         ------------------------------------------------------------
         function Tab:AddStatGrid(items)
             items = items or {}
             local rows = math.ceil(#items / 2)
-            local gridH = rows * 48 + math.max(rows - 1, 0) * 6
+            local gridH = rows * 48 + math.max(rows - 1, 0) * 8
             local gridHolder = New("Frame", {
                 Size = UDim2.new(1, 0, 0, gridH),
                 BackgroundTransparency = 1,
@@ -1746,8 +1896,8 @@ function Kami:CreateWindow(cfg)
                 Parent = Page,
             })
             New("UIGridLayout", {
-                CellSize = UDim2.new(0.5, -3, 0, 48),
-                CellPadding = UDim2.fromOffset(6, 6),
+                CellSize = UDim2.new(0.5, -4, 0, 48),
+                CellPadding = UDim2.fromOffset(8, 8),
                 SortOrder = Enum.SortOrder.LayoutOrder,
                 Parent = gridHolder,
             })
