@@ -1,6 +1,16 @@
 --[[
-    KAMI UI - v1.3.1
+    KAMI UI - v1.4.0
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.0 changes ("Animated Accent" pack):
+      - Rotating gradient rim around the window (spins forever)
+      - Moving accent glint sweeping along the header underline
+      - Accent bar with a flowing vertical gradient
+      - Gradient tab indicator, gradient slider fill
+      - Button sheen that sweeps on hover
+      - Slider knob glow that pulses while dragging
+      - Rotating gradient rim on notifications
+      (Colours are still the original palette - only light/motion added.)
 
     v1.3.1 changes:
       - Reverted the window/UI colours back to the original (v1.2.1) palette
@@ -34,7 +44,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.3.1"
+    Version = "1.4.0"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -273,6 +283,38 @@ local function AddGlow(parent, color, size, transparency, zindex)
         ZIndex = zindex or 0,
         Parent = parent,
     })
+end
+
+-- Colour a spinner border should cycle through (accent -> border -> accent)
+local function SpinSeq()
+    return ColorSequence.new({
+        ColorSequenceKeypoint.new(0, CurrentTheme.Accent),
+        ColorSequenceKeypoint.new(0.5, CurrentTheme.Border),
+        ColorSequenceKeypoint.new(1, CurrentTheme.Accent),
+    })
+end
+
+-- Animated gradient rim: a slightly larger frame placed behind `parentOb`, so
+-- only a thin rim peeks out. Its gradient spins forever (no per-instance cost
+-- beyond a single Tween, so it is safe for the window and notifications).
+local function SpawnSpinBorder(parentOb, thickness, zindex, speed)
+    local ring = New("Frame", {
+        Name = "KamiSpinBorder",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, (thickness or 1) * 2, 1, (thickness or 1) * 2),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        ZIndex = zindex or 0,
+        Parent = parentOb,
+    })
+    local grad = AddGradient(ring, SpinSeq(), 0)
+    TweenService:Create(
+        grad,
+        TweenInfo.new(speed or 6, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+        { Rotation = 360 }
+    ):Play()
+    return ring, grad
 end
 
 -- Sharp flash ripple (no round corners)
@@ -888,11 +930,13 @@ function Kami:Notify(cfg)
         Position = UDim2.new(1, 40, 0, 0),
         BackgroundColor3 = T.Card,
         BorderSizePixel = 0,
-        ClipsDescendants = true,
+        ClipsDescendants = false,
         Parent = slot,
     })
     Corner(card, 6)
     Stroke(card, T.Border)
+    -- animated gradient rim around the notification
+    SpawnSpinBorder(card, 1, 0, 4)
 
     -- left accent line
     New("Frame", {
@@ -1149,6 +1193,8 @@ function Kami:CreateWindow(cfg)
     })
     Corner(MainFrame, 8)
     local MainStroke = Stroke(MainFrame, CurrentTheme.Border)
+    -- Animated gradient rim (rotates forever) peeking out behind the window
+    local BorderSpin, BorderSpinGrad = SpawnSpinBorder(Holder, 1, 0, 6)
 
     -- Fade veil (gives the window a "fade" without CanvasGroup)
     local Veil = New("Frame", {
@@ -1165,6 +1211,7 @@ function Kami:CreateWindow(cfg)
         MainFrame.BackgroundColor3 = CurrentTheme.Bg
         MainStroke.Color = CurrentTheme.Border
         Veil.BackgroundColor3 = CurrentTheme.Bg
+        BorderSpinGrad.Color = SpinSeq()
     end)
 
     --================ HEADER ================
@@ -1185,14 +1232,49 @@ function Kami:CreateWindow(cfg)
         Parent = Header,
     })
 
+    -- Moving accent glint sweeping along the header underline
+    local HeaderGlint = New("Frame", {
+        Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.new(0, 0, 1, -1),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = Header,
+    })
+    local HeaderGlintGrad = AddGradient(HeaderGlint, ColorSequence.new(CurrentTheme.Accent))
+    HeaderGlintGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    HeaderGlintGrad.Offset = Vector2.new(-1, 0)
+    TweenService:Create(
+        HeaderGlintGrad,
+        TweenInfo.new(3.2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+        { Offset = Vector2.new(1, 0) }
+    ):Play()
+
     -- Accent bar (replaces K logo mark)
     local AccentBar = New("Frame", {
         Size = UDim2.new(0, 2, 1, -16),
         Position = UDim2.fromOffset(12, 8),
         BackgroundColor3 = CurrentTheme.Accent,
         BorderSizePixel = 0,
+        ClipsDescendants = true,
         Parent = Header,
     })
+    -- gradient flowing vertically down the accent bar
+    local AccentBarGrad = AddGradient(AccentBar, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+        ColorSequenceKeypoint.new(0.5, CurrentTheme.Accent),
+        ColorSequenceKeypoint.new(1, CurrentTheme.AccentMuted),
+    }), 90)
+    AccentBarGrad.Offset = Vector2.new(0, -1)
+    TweenService:Create(
+        AccentBarGrad,
+        TweenInfo.new(2.6, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
+        { Offset = Vector2.new(0, 1) }
+    ):Play()
 
     local TitleName = New("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
@@ -1293,6 +1375,12 @@ function Kami:CreateWindow(cfg)
         Header.BackgroundColor3 = CurrentTheme.Sidebar
         HeaderLine.BackgroundColor3 = CurrentTheme.Border
         AccentBar.BackgroundColor3 = CurrentTheme.Accent
+        HeaderGlintGrad.Color = ColorSequence.new(CurrentTheme.Accent)
+        AccentBarGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+            ColorSequenceKeypoint.new(0.5, CurrentTheme.Accent),
+            ColorSequenceKeypoint.new(1, CurrentTheme.AccentMuted),
+        })
         TitleName.TextColor3 = CurrentTheme.Text
         TitleSub.TextColor3 = CurrentTheme.TextDull
         Crumb.TextColor3 = CurrentTheme.TextDull
@@ -1666,6 +1754,10 @@ function Kami:CreateWindow(cfg)
             Parent = TabBtn,
         })
         Corner(TabIndicator, 2)
+        AddGradient(TabIndicator, ColorSequence.new({
+            ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+            ColorSequenceKeypoint.new(1, CurrentTheme.Accent),
+        }), 90)
 
         local textOffset = 14
         local iconImg = nil
@@ -2449,6 +2541,11 @@ function Kami:CreateWindow(cfg)
             Corner(bAction, 4)
             Pad(bAction, 0, 0, 14, 14)
             local bStroke = Stroke(bAction, CurrentTheme.BorderHover)
+            -- subtle sheen that sweeps across when hovered
+            local bGrad = AddGradient(bAction, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(214, 214, 222)),
+            }), 90)
 
             local hovering = false
             RegisterPaint(function()
@@ -2461,11 +2558,13 @@ function Kami:CreateWindow(cfg)
                 hovering = true
                 Tween(bAction, 0.18, { BackgroundColor3 = CurrentTheme.Accent, TextColor3 = CurrentTheme.Bg })
                 Tween(bStroke, 0.18, { Color = CurrentTheme.Accent })
+                Tween(bGrad, 0.35, { Offset = Vector2.new(0, 0.4) })
             end)
             bAction.MouseLeave:Connect(function()
                 hovering = false
                 Tween(bAction, 0.18, { BackgroundColor3 = CurrentTheme.Bg, TextColor3 = CurrentTheme.Text })
                 Tween(bStroke, 0.18, { Color = CurrentTheme.BorderHover })
+                Tween(bGrad, 0.35, { Offset = Vector2.new(0, 0) })
             end)
             bAction.MouseButton1Click:Connect(function()
                 Ripple(bAction)
@@ -2561,6 +2660,10 @@ function Kami:CreateWindow(cfg)
                 Parent = track,
             })
             Corner(fill, 999)
+            local fillGrad = AddGradient(fill, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(190, 190, 190)),
+                ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+            }), 0)
 
             local knob = New("Frame", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2573,6 +2676,15 @@ function Kami:CreateWindow(cfg)
             })
             Corner(knob, 999)
             local kStroke = Stroke(knob, CurrentTheme.Bg, 2)
+
+            -- glow behind the knob; pulses while dragging
+            local knobGlow = AddGlow(track, CurrentTheme.Accent, UDim2.fromOffset(26, 26), 0.85, 1)
+            knobGlow.Position = UDim2.new(Ratio(cur), 0, 0.5, 0)
+            local knobPulse = TweenService:Create(
+                knobGlow,
+                TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { ImageTransparency = 0.95 }
+            )
 
             local trigger = New("TextButton", {
                 Position = UDim2.fromOffset(8, 26),
@@ -2588,6 +2700,7 @@ function Kami:CreateWindow(cfg)
                 local t = instant and 0 or 0.12
                 Tween(fill, t, { Size = UDim2.new(r, 0, 1, 0) })
                 Tween(knob, t, { Position = UDim2.new(r, 0, 0.5, 0) })
+                Tween(knobGlow, t, { Position = UDim2.new(r, 0, 0.5, 0) })
                 sVal.Text = Fmt(cur)
             end
 
@@ -2610,6 +2723,8 @@ function Kami:CreateWindow(cfg)
                     dragging = true
                     Tween(knob, 0.2, { Size = UDim2.fromOffset(14, 14) }, Enum.EasingStyle.Back)
                     Tween(vStroke, 0.2, { Color = CurrentTheme.AccentMuted })
+                    knobGlow.ImageTransparency = 0.7
+                    knobPulse:Play()
                     Update(inp.Position.X)
                 end
             end)
@@ -2618,6 +2733,8 @@ function Kami:CreateWindow(cfg)
                     dragging = false
                     Tween(knob, 0.2, { Size = UDim2.fromOffset(10, 10) })
                     Tween(vStroke, 0.2, { Color = CurrentTheme.Border })
+                    knobPulse:Cancel()
+                    knobGlow.ImageTransparency = 0.85
                 end
             end)
             UserInputService.InputChanged:Connect(function(inp)
@@ -2634,6 +2751,7 @@ function Kami:CreateWindow(cfg)
                 track.BackgroundColor3 = CurrentTheme.Border
                 fill.BackgroundColor3 = CurrentTheme.Accent
                 knob.BackgroundColor3 = CurrentTheme.Accent
+                knobGlow.ImageColor3 = CurrentTheme.Accent
                 kStroke.Color = CurrentTheme.Card
             end)
 
