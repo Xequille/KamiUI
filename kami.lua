@@ -1,6 +1,16 @@
 --[[
-    KAMI UI - v1.4.0
+    KAMI UI - v1.4.1
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.1 changes:
+      - Left accent stripe on every row (toggle/slider/button/dropdown/input/
+        keybind); subtle gradient and it grows on hover
+      - Loading screen rebuilt to a clean, minimal layout (wordmark + thin
+        progress bar + live percentage, one soft breathing glow)
+      - Fixed sidebar footer peeking into the header when the window is
+        minimized (footer is hidden while collapsed)
+      - Notification reverted to the previous style, lightly polished
+        (gradient accent line + top highlight + gradient timer)
 
     v1.4.0 changes ("Animated Accent" pack):
       - Rotating gradient rim around the window (spins forever)
@@ -9,8 +19,6 @@
       - Gradient tab indicator, gradient slider fill
       - Button sheen that sweeps on hover
       - Slider knob glow that pulses while dragging
-      - Rotating gradient rim on notifications
-      (Colours are still the original palette - only light/motion added.)
 
     v1.3.1 changes:
       - Reverted the window/UI colours back to the original (v1.2.1) palette
@@ -44,7 +52,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.0"
+    Version = "1.4.1"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -394,14 +402,14 @@ end
 function Kami:ShowLoadingScreen(cfg)
     cfg = cfg or {}
     local steps = cfg.Steps or {
-        "Initializing environment...",
-        "Authenticating session...",
+        "Initializing...",
         "Loading modules...",
         "Building interface...",
         "Ready.",
     }
     if #steps == 0 then steps = { "Loading..." } end
-    local duration = cfg.Duration or 2.8
+    local duration = cfg.Duration or 2.6
+    local title = cfg.Title or "KAMI"
     local T = CurrentTheme
 
     local LoadGui = New("ScreenGui", {
@@ -413,293 +421,115 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = GetParent(),
     })
 
-    -- Backdrop (vertical gradient for depth)
+    -- flat backdrop
     local Bg = New("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = T.Bg,
-        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Parent = LoadGui,
     })
 
-    -- Drifting ambient glow
-    local Ambient = AddGlow(Bg, T.Accent, UDim2.new(0.85, 0, 0.85, 0), 0.95, 0)
-    Ambient.Position = UDim2.fromScale(0.5, 0.4)
-    TweenService:Create(Ambient, TweenInfo.new(3.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        ImageTransparency = 0.84,
-        Size = UDim2.new(1.0, 0, 1.0, 0),
+    -- one soft ambient glow that gently breathes
+    local Glow = AddGlow(Bg, T.Accent, UDim2.new(0.9, 0, 0.9, 0), 0.96, 0)
+    Glow.Position = UDim2.fromScale(0.5, 0.44)
+    TweenService:Create(Glow, TweenInfo.new(3.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+        ImageTransparency = 0.88,
     }):Play()
-
-    -- HUD corner brackets
-    local bracketParts = {}
-    local function Bracket(anchorPoint, pos, horizontalAtTop, verticalAtLeft)
-        local holder = New("Frame", {
-            AnchorPoint = anchorPoint,
-            Position = pos,
-            Size = UDim2.fromOffset(26, 26),
-            BackgroundTransparency = 1,
-            Parent = Bg,
-        })
-        local hLine = New("Frame", {
-            Size = UDim2.new(1, 0, 0, 1),
-            Position = UDim2.new(0, 0, horizontalAtTop and 0 or 1, horizontalAtTop and 0 or -1),
-            BackgroundColor3 = T.Accent,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Parent = holder,
-        })
-        local vLine = New("Frame", {
-            Size = UDim2.new(0, 1, 1, 0),
-            Position = UDim2.new(verticalAtLeft and 0 or 1, verticalAtLeft and 0 or -1, 0, 0),
-            BackgroundColor3 = T.Accent,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Parent = holder,
-        })
-        table.insert(bracketParts, hLine)
-        table.insert(bracketParts, vLine)
-    end
-    Bracket(Vector2.new(0, 0), UDim2.fromOffset(18, 18), true, true)
-    Bracket(Vector2.new(1, 0), UDim2.new(1, -18, 0, 18), true, false)
-    Bracket(Vector2.new(0, 1), UDim2.new(0, 18, 1, -18), false, true)
-    Bracket(Vector2.new(1, 1), UDim2.new(1, -18, 1, -18), false, false)
-
-    -- Floating particles
-    task.spawn(function()
-        local rng = Random.new()
-        while LoadGui.Parent do
-            local dot = New("Frame", {
-                Position = UDim2.new(rng:NextNumber(), 0, 1.02, 0),
-                Size = UDim2.fromOffset(rng:NextInteger(1, 2), rng:NextInteger(1, 2)),
-                BackgroundColor3 = CurrentTheme.Accent,
-                BackgroundTransparency = rng:NextNumber(0.45, 0.8),
-                BorderSizePixel = 0,
-                Parent = Bg,
-            })
-            local dur = rng:NextNumber(3.2, 6.5)
-            Tween(dot, dur, {
-                Position = UDim2.new(dot.Position.X.Scale, 0, -0.05, 0),
-                BackgroundTransparency = 1,
-            }, Enum.EasingStyle.Linear)
-            task.delay(dur, function() dot:Destroy() end)
-            task.wait(rng:NextNumber(0.1, 0.32))
-        end
-    end)
 
     local Center = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 12),
-        Size = UDim2.fromOffset(340, 220),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(320, 140),
         BackgroundTransparency = 1,
         Parent = Bg,
     })
-    local CenterScale = New("UIScale", { Scale = 0.9, Parent = Center })
+    local CenterScale = New("UIScale", { Scale = 1, Parent = Center })
 
-    local centerY = 46
-
-    -- Glow behind the mark
-    local MarkGlow = AddGlow(Center, T.Accent, UDim2.fromOffset(124, 124), 0.6)
-    MarkGlow.Position = UDim2.new(0.5, 0, 0, centerY)
-    TweenService:Create(MarkGlow, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        ImageTransparency = 0.8,
-    }):Play()
-
-    -- Rotating HUD rings
-    local RingOuter = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0, centerY),
-        Size = UDim2.fromOffset(92, 92),
-        BackgroundTransparency = 1,
+    New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 12),
         Parent = Center,
     })
-    local roStroke = Stroke(RingOuter, T.Accent, 1, 1)
-    AddGradient(roStroke, ColorSequence.new({
-        ColorSequenceKeypoint.new(0, T.Accent),
-        ColorSequenceKeypoint.new(0.5, T.AccentMuted),
-        ColorSequenceKeypoint.new(1, T.Accent),
-    }))
 
-    local RingInner = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0, centerY),
-        Size = UDim2.fromOffset(74, 74),
-        Rotation = 45,
+    -- wordmark
+    local Mark = New("TextLabel", {
+        Size = UDim2.fromOffset(320, 34),
         BackgroundTransparency = 1,
-        Parent = Center,
-    })
-    local riStroke = Stroke(RingInner, T.Accent, 1, 1)
-    AddGradient(riStroke, ColorSequence.new({
-        ColorSequenceKeypoint.new(0, T.AccentMuted),
-        ColorSequenceKeypoint.new(0.5, T.Accent),
-        ColorSequenceKeypoint.new(1, T.AccentMuted),
-    }))
-
-    -- Orbiting accent dots
-    local Orbit = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0, centerY),
-        Size = UDim2.fromOffset(0, 0),
-        BackgroundTransparency = 1,
-        Parent = Center,
-    })
-    local orbits = {}
-    for i = 1, 3 do
-        local d = New("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Size = UDim2.fromOffset(i == 1 and 5 or 4, i == 1 and 5 or 4),
-            BackgroundColor3 = T.Accent,
-            BorderSizePixel = 0,
-            Parent = Orbit,
-        })
-        table.insert(orbits, {
-            Dot = d,
-            Radius = 38 + i * 6,
-            Speed = (1.6 + i * 0.5) * (i % 2 == 0 and -1 or 1),
-            Phase = (i - 1) * 2.1,
-        })
-    end
-
-    local orbitConn = RunService.RenderStepped:Connect(function()
-        local t = os.clock()
-        for _, o in ipairs(orbits) do
-            local a = t * o.Speed + o.Phase
-            o.Dot.Position = UDim2.fromOffset(math.cos(a) * o.Radius, math.sin(a) * o.Radius)
-        end
-    end)
-
-    -- Logo mark w/ rotating border shine
-    local Mark = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0, centerY),
-        Size = UDim2.fromOffset(56, 56),
-        BackgroundColor3 = T.Card,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Parent = Center,
-    })
-    local MarkStroke = Stroke(Mark, Color3.new(1, 1, 1), 1.2, 1)
-    local MarkGrad = AddGradient(MarkStroke, ColorSequence.new({
-        ColorSequenceKeypoint.new(0, T.Border),
-        ColorSequenceKeypoint.new(0.5, T.Accent),
-        ColorSequenceKeypoint.new(1, T.Border),
-    }))
-    local KLogo = New("TextLabel", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Text = "K",
+        Text = title,
         Font = Enum.Font.GothamBold,
-        TextSize = 24,
+        TextSize = 30,
         TextColor3 = T.Text,
-        TextTransparency = 1,
-        Parent = Mark,
-    })
-
-    local Title = New("TextLabel", {
-        Position = UDim2.fromOffset(0, 92),
-        Size = UDim2.new(1, 0, 0, 16),
-        BackgroundTransparency = 1,
-        Text = Spaced(cfg.Title or "KAMI UI"),
-        Font = Enum.Font.GothamMedium,
-        TextSize = 12,
-        TextColor3 = T.Text,
-        MaxVisibleGraphemes = 0,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        LayoutOrder = 1,
         Parent = Center,
     })
 
+    -- accent underline (grows in under the wordmark)
+    local Under = New("Frame", {
+        Size = UDim2.new(0, 0, 0, 2),
+        BackgroundColor3 = T.Accent,
+        BorderSizePixel = 0,
+        LayoutOrder = 2,
+        Parent = Center,
+    })
+
+    -- status text
     local Status = New("TextLabel", {
-        Position = UDim2.fromOffset(0, 112),
-        Size = UDim2.new(1, 0, 0, 14),
+        Size = UDim2.fromOffset(320, 14),
         BackgroundTransparency = 1,
         Text = steps[1],
         Font = Enum.Font.Gotham,
-        TextSize = 10,
+        TextSize = 11,
         TextColor3 = T.TextMuted,
-        TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        LayoutOrder = 3,
         Parent = Center,
     })
 
+    -- thin progress bar
     local BarBg = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 140),
-        Size = UDim2.new(0, 0, 0, 3),
+        Size = UDim2.new(0, 220, 0, 3),
         BackgroundColor3 = T.Border,
         BorderSizePixel = 0,
+        LayoutOrder = 4,
         Parent = Center,
     })
-
     local BarFill = New("Frame", {
         Size = UDim2.new(0, 0, 1, 0),
-        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundColor3 = T.Accent,
         BorderSizePixel = 0,
         Parent = BarBg,
     })
-    local BarGrad = AddGradient(BarFill, ColorSequence.new({
+    AddGradient(BarFill, ColorSequence.new({
         ColorSequenceKeypoint.new(0, T.AccentMuted),
-        ColorSequenceKeypoint.new(0.5, T.Accent),
-        ColorSequenceKeypoint.new(1, T.AccentMuted),
-    }))
-    BarGrad.Offset = Vector2.new(-1, 0)
+        ColorSequenceKeypoint.new(1, T.Accent),
+    }), 0)
 
-    local BarHead = New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(7, 7),
-        Rotation = 45,
-        BackgroundColor3 = T.Accent,
-        BorderSizePixel = 0,
-        ZIndex = 2,
-        Parent = BarFill,
-    })
-
+    -- live percentage under the bar
     local Percent = New("TextLabel", {
-        Position = UDim2.fromOffset(0, 150),
-        Size = UDim2.new(1, 0, 0, 12),
+        Size = UDim2.fromOffset(220, 12),
         BackgroundTransparency = 1,
         Text = "0%",
         Font = Enum.Font.Gotham,
         TextSize = 9,
         TextColor3 = T.TextDull,
-        TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        LayoutOrder = 5,
         Parent = Center,
     })
 
-    -- Intro
-    Tween(Bg, 0.4, { BackgroundTransparency = 0 })
-    Tween(Center, 0.6, { Position = UDim2.new(0.5, 0, 0.5, 0) })
-    Tween(CenterScale, 0.6, { Scale = 1 })
-    Tween(Mark, 0.5, { BackgroundTransparency = 0 })
-    Tween(MarkStroke, 0.5, { Transparency = 0 })
-    Tween(KLogo, 0.5, { TextTransparency = 0 })
-    Tween(Status, 0.5, { TextTransparency = 0 })
-    Tween(Percent, 0.5, { TextTransparency = 0 })
-    Tween(BarBg, 0.6, { Size = UDim2.new(0, 240, 0, 3) })
-    for _, part in ipairs(bracketParts) do
-        Tween(part, 0.7, { BackgroundTransparency = 0.25 })
-    end
-    Tween(roStroke, 0.6, { Transparency = 0.25 })
-    Tween(riStroke, 0.7, { Transparency = 0.35 })
+    -- entrance
+    CenterScale.Scale = 0.96
+    Mark.TextTransparency = 1
+    Status.TextTransparency = 1
+    Tween(Mark, 0.5, { TextTransparency = 0 })
+    Tween(Status, 0.4, { TextTransparency = 0 })
+    Tween(CenterScale, 0.6, { Scale = 1 }, Enum.EasingStyle.Quint)
+    Tween(Under, 0.6, { Size = UDim2.new(0, 54, 0, 2) }, Enum.EasingStyle.Quint)
 
-    local spinOuter = TweenService:Create(RingOuter, TweenInfo.new(7, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
-    spinOuter:Play()
-    local spinInner = TweenService:Create(RingInner, TweenInfo.new(4.5, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = -360 })
-    spinInner:Play()
-    local spinMark = TweenService:Create(MarkGrad, TweenInfo.new(2.4, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Rotation = 360 })
-    spinMark:Play()
-    local shimmer = TweenService:Create(BarGrad, TweenInfo.new(1.2, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Offset = Vector2.new(1, 0) })
-    shimmer:Play()
-
-    -- Typewriter title
-    task.spawn(function()
-        local total = utf8.len(Title.Text) or #Title.Text
-        for i = 1, total do
-            if not Title.Parent then return end
-            Title.MaxVisibleGraphemes = i
-            task.wait(0.025)
-        end
-        Title.MaxVisibleGraphemes = -1
-    end)
-
-    -- Percent counter
     local pctConn = RunService.RenderStepped:Connect(function()
         Percent.Text = tostring(math.floor(BarFill.Size.X.Scale * 100 + 0.5)) .. "%"
     end)
@@ -718,30 +548,21 @@ function Kami:ShowLoadingScreen(cfg)
         task.wait(math.max(delayPerStep - (i > 1 and 0.12 or 0), 0.05))
     end
 
-    task.wait(0.2)
+    task.wait(0.18)
+    pctConn:Disconnect()
 
-    -- Outro
-    Tween(CenterScale, 0.35, { Scale = 1.04 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-    Tween(Bg, 0.4, { BackgroundTransparency = 1 })
-    Tween(Ambient, 0.3, { ImageTransparency = 1 })
-    Tween(MarkGlow, 0.3, { ImageTransparency = 1 })
-    Tween(Mark, 0.25, { BackgroundTransparency = 1 })
-    Tween(MarkStroke, 0.25, { Transparency = 1 })
-    for _, lbl in ipairs({ KLogo, Title, Status, Percent }) do
-        Tween(lbl, 0.25, { TextTransparency = 1 })
-    end
+    -- outro
+    Tween(CenterScale, 0.35, { Scale = 1.03 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    Tween(Bg, 0.35, { BackgroundTransparency = 1 })
+    Tween(Glow, 0.3, { ImageTransparency = 1 })
+    Tween(Mark, 0.25, { TextTransparency = 1 })
+    Tween(Status, 0.25, { TextTransparency = 1 })
+    Tween(Percent, 0.25, { TextTransparency = 1 })
+    Tween(Under, 0.25, { BackgroundTransparency = 1 })
     Tween(BarBg, 0.25, { BackgroundTransparency = 1 })
     Tween(BarFill, 0.25, { BackgroundTransparency = 1 })
-    Tween(BarHead, 0.25, { BackgroundTransparency = 1 })
-    Tween(roStroke, 0.3, { Transparency = 1 })
-    Tween(riStroke, 0.3, { Transparency = 1 })
-    for _, o in ipairs(orbits) do Tween(o.Dot, 0.25, { BackgroundTransparency = 1 }) end
-    for _, part in ipairs(bracketParts) do Tween(part, 0.3, { BackgroundTransparency = 1 }) end
 
-    task.wait(0.42)
-    spinOuter:Cancel(); spinInner:Cancel(); spinMark:Cancel(); shimmer:Cancel()
-    pctConn:Disconnect()
-    orbitConn:Disconnect()
+    task.wait(0.4)
     LoadGui:Destroy()
 end
 
@@ -930,22 +751,34 @@ function Kami:Notify(cfg)
         Position = UDim2.new(1, 40, 0, 0),
         BackgroundColor3 = T.Card,
         BorderSizePixel = 0,
-        ClipsDescendants = false,
+        ClipsDescendants = true,
         Parent = slot,
     })
     Corner(card, 6)
     Stroke(card, T.Border)
-    -- animated gradient rim around the notification
-    SpawnSpinBorder(card, 1, 0, 4)
 
-    -- left accent line
+    -- top highlight (subtle bevel)
     New("Frame", {
-        Size = UDim2.new(0, 2, 1, -16),
-        Position = UDim2.fromOffset(0, 8),
-        BackgroundColor3 = T.Accent,
+        Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.92,
         BorderSizePixel = 0,
         Parent = card,
     })
+
+    -- left accent line (subtle vertical gradient)
+    local nAccent = New("Frame", {
+        Size = UDim2.new(0, 2, 1, -16),
+        Position = UDim2.fromOffset(0, 8),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        Parent = card,
+    })
+    AddGradient(nAccent, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(0.5, T.Accent),
+        ColorSequenceKeypoint.new(1, T.AccentMuted),
+    }), 90)
 
     local body = New("Frame", {
         Size = UDim2.new(1, 0, 0, 0),
@@ -1051,11 +884,15 @@ function Kami:Notify(cfg)
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 0, 1, 0),
         Size = UDim2.new(1, 0, 0, 2),
-        BackgroundColor3 = T.Accent,
+        BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 0.55,
         BorderSizePixel = 0,
         Parent = card,
     })
+    AddGradient(timer, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(1, T.Accent),
+    }))
 
     local function Fit()
         if closed then return end
@@ -1419,11 +1256,20 @@ function Kami:CreateWindow(cfg)
 
     function Window:Toggle() Window:SetVisible(not Window.Visible) end
 
+    -- Sidebar footer parts (filled in after the sidebar is built). When the
+    -- window is collapsed, their bottom-anchored positions would flip up into
+    -- the header strip, so we hide them while collapsed.
+    local SidebarFooterParts = {}
+    local function ShowSidebarFooter(v)
+        for _, ob in ipairs(SidebarFooterParts) do ob.Visible = v end
+    end
+
     local collapsed = false
     function Window:SetCollapsed(state)
         collapsed = state and true or false
         CloseDropdown()
         CloseColorPicker()
+        ShowSidebarFooter(not collapsed)
         local target = collapsed and UDim2.new(winSize.X.Scale, winSize.X.Offset, 0, HEADER_H) or winSize
         -- Re-clamp so expanding near a screen edge can never push the window off-screen
         Tween(Holder, 0.45, { Size = target, Position = ClampHolderPosition(target) })
@@ -1561,6 +1407,9 @@ function Kami:CreateWindow(cfg)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = Sidebar,
     })
+    SidebarFooterParts[1] = FooterLine
+    SidebarFooterParts[2] = StatusDot
+    SidebarFooterParts[3] = Footer
 
     RegisterPaint(function()
         Sidebar.BackgroundColor3 = CurrentTheme.Sidebar
@@ -1893,18 +1742,38 @@ function Kami:CreateWindow(cfg)
             Corner(row, 5)
             local st = Stroke(row, CurrentTheme.Border)
 
+            -- left accent stripe (subtle gradient, grows on hover)
+            local rowAccent = New("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
+                Size = UDim2.new(0, 2, 0, 18),
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BorderSizePixel = 0,
+                Parent = row,
+            })
+            local rowAccentGrad = AddGradient(rowAccent, ColorSequence.new({
+                ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+                ColorSequenceKeypoint.new(1, CurrentTheme.Accent),
+            }), 90)
+
             RegisterPaint(function()
                 row.BackgroundColor3 = CurrentTheme.Card
                 st.Color = CurrentTheme.Border
+                rowAccentGrad.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
+                    ColorSequenceKeypoint.new(1, CurrentTheme.Accent),
+                })
             end)
 
             row.MouseEnter:Connect(function()
                 Tween(st, 0.2, { Color = CurrentTheme.BorderHover })
                 Tween(row, 0.2, { BackgroundColor3 = CurrentTheme.CardHover })
+                Tween(rowAccent, 0.25, { Size = UDim2.new(0, 2, 0, 26) }, Enum.EasingStyle.Back)
             end)
             row.MouseLeave:Connect(function()
                 Tween(st, 0.2, { Color = CurrentTheme.Border })
                 Tween(row, 0.2, { BackgroundColor3 = CurrentTheme.Card })
+                Tween(rowAccent, 0.25, { Size = UDim2.new(0, 2, 0, 18) })
             end)
 
             return row, st
