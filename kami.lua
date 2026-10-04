@@ -1,6 +1,12 @@
 --[[
-    KAMI UI - v1.4.1
+    KAMI UI - v1.4.2
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.2 changes:
+      - Loading screen: removed the big backdrop glow (it caused a grey haze
+        on dark themes). New clean layout with a rotating gradient logo mark,
+        spaced wordmark, thin progress bar with a moving glint, live
+        percentage and a small build tag.
 
     v1.4.1 changes:
       - Left accent stripe on every row (toggle/slider/button/dropdown/input/
@@ -52,7 +58,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.1"
+    Version = "1.4.2"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -421,7 +427,7 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = GetParent(),
     })
 
-    -- flat backdrop
+    -- solid backdrop (no big glow = no grey haze)
     local Bg = New("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = T.Bg,
@@ -429,69 +435,69 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = LoadGui,
     })
 
-    -- one soft ambient glow that gently breathes
-    local Glow = AddGlow(Bg, T.Accent, UDim2.new(0.9, 0, 0.9, 0), 0.96, 0)
-    Glow.Position = UDim2.fromScale(0.5, 0.44)
-    TweenService:Create(Glow, TweenInfo.new(3.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-        ImageTransparency = 0.88,
-    }):Play()
-
     local Center = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(320, 140),
+        Size = UDim2.fromOffset(300, 170),
         BackgroundTransparency = 1,
         Parent = Bg,
     })
     local CenterScale = New("UIScale", { Scale = 1, Parent = Center })
-
     New("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
         VerticalAlignment = Enum.VerticalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 12),
+        Padding = UDim.new(0, 14),
         Parent = Center,
     })
 
-    -- wordmark
-    local Mark = New("TextLabel", {
-        Size = UDim2.fromOffset(320, 34),
+    -- rotating gradient logo mark (sharp square rim)
+    local Logo = New("Frame", {
+        Size = UDim2.fromOffset(22, 22),
         BackgroundTransparency = 1,
-        Text = title,
-        Font = Enum.Font.GothamBold,
-        TextSize = 30,
-        TextColor3 = T.Text,
-        TextXAlignment = Enum.TextXAlignment.Center,
         LayoutOrder = 1,
         Parent = Center,
     })
-
-    -- accent underline (grows in under the wordmark)
-    local Under = New("Frame", {
-        Size = UDim2.new(0, 0, 0, 2),
-        BackgroundColor3 = T.Accent,
+    SpawnSpinBorder(Logo, 2, 1, 5)
+    New("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(22, 22),
+        BackgroundColor3 = T.Bg,
         BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = Logo,
+    })
+
+    -- wordmark (wide letter spacing)
+    local Mark = New("TextLabel", {
+        Size = UDim2.fromOffset(300, 30),
+        BackgroundTransparency = 1,
+        Text = Spaced(title),
+        Font = Enum.Font.GothamBold,
+        TextSize = 22,
+        TextColor3 = T.Text,
+        TextXAlignment = Enum.TextXAlignment.Center,
         LayoutOrder = 2,
         Parent = Center,
     })
 
-    -- status text
     local Status = New("TextLabel", {
-        Size = UDim2.fromOffset(320, 14),
+        Size = UDim2.fromOffset(300, 14),
         BackgroundTransparency = 1,
         Text = steps[1],
         Font = Enum.Font.Gotham,
-        TextSize = 11,
+        TextSize = 10,
         TextColor3 = T.TextMuted,
         TextXAlignment = Enum.TextXAlignment.Center,
         LayoutOrder = 3,
         Parent = Center,
     })
 
-    -- thin progress bar
+    -- thin progress bar with a moving glint
     local BarBg = New("Frame", {
-        Size = UDim2.new(0, 220, 0, 3),
+        Size = UDim2.new(0, 240, 0, 2),
         BackgroundColor3 = T.Border,
         BorderSizePixel = 0,
         LayoutOrder = 4,
@@ -507,10 +513,25 @@ function Kami:ShowLoadingScreen(cfg)
         ColorSequenceKeypoint.new(0, T.AccentMuted),
         ColorSequenceKeypoint.new(1, T.Accent),
     }), 0)
+    local Glint = New("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = BarFill,
+    })
+    local GlintGrad = AddGradient(Glint, ColorSequence.new(Color3.new(1, 1, 1)), 0)
+    GlintGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0.35),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    GlintGrad.Offset = Vector2.new(-1, 0)
+    local shimmer = TweenService:Create(GlintGrad, TweenInfo.new(1.6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1), { Offset = Vector2.new(1, 0) })
+    shimmer:Play()
 
-    -- live percentage under the bar
     local Percent = New("TextLabel", {
-        Size = UDim2.fromOffset(220, 12),
+        Size = UDim2.fromOffset(240, 12),
         BackgroundTransparency = 1,
         Text = "0%",
         Font = Enum.Font.Gotham,
@@ -521,6 +542,20 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = Center,
     })
 
+    -- bottom-left build tag
+    local Build = New("TextLabel", {
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 22, 1, -18),
+        Size = UDim2.fromOffset(220, 14),
+        BackgroundTransparency = 1,
+        Text = "KAMI  ·  v" .. Kami.Version,
+        Font = Enum.Font.Gotham,
+        TextSize = 9,
+        TextColor3 = T.TextDull,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = Bg,
+    })
+
     -- entrance
     CenterScale.Scale = 0.96
     Mark.TextTransparency = 1
@@ -528,7 +563,6 @@ function Kami:ShowLoadingScreen(cfg)
     Tween(Mark, 0.5, { TextTransparency = 0 })
     Tween(Status, 0.4, { TextTransparency = 0 })
     Tween(CenterScale, 0.6, { Scale = 1 }, Enum.EasingStyle.Quint)
-    Tween(Under, 0.6, { Size = UDim2.new(0, 54, 0, 2) }, Enum.EasingStyle.Quint)
 
     local pctConn = RunService.RenderStepped:Connect(function()
         Percent.Text = tostring(math.floor(BarFill.Size.X.Scale * 100 + 0.5)) .. "%"
@@ -554,15 +588,15 @@ function Kami:ShowLoadingScreen(cfg)
     -- outro
     Tween(CenterScale, 0.35, { Scale = 1.03 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
     Tween(Bg, 0.35, { BackgroundTransparency = 1 })
-    Tween(Glow, 0.3, { ImageTransparency = 1 })
     Tween(Mark, 0.25, { TextTransparency = 1 })
     Tween(Status, 0.25, { TextTransparency = 1 })
     Tween(Percent, 0.25, { TextTransparency = 1 })
-    Tween(Under, 0.25, { BackgroundTransparency = 1 })
+    Tween(Build, 0.25, { TextTransparency = 1 })
     Tween(BarBg, 0.25, { BackgroundTransparency = 1 })
     Tween(BarFill, 0.25, { BackgroundTransparency = 1 })
 
     task.wait(0.4)
+    shimmer:Cancel()
     LoadGui:Destroy()
 end
 
