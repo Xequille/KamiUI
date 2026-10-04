@@ -1,6 +1,11 @@
 --[[
-    KAMI UI - v1.4.4
+    KAMI UI - v1.4.5
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.5 changes:
+      - Loading screen: if cfg.Logo is an image that fails to load (Roblox
+        blocks most external image URLs), it gracefully falls back to the
+        big "K" instead of showing an empty box
 
     v1.4.4 changes:
       - Loading screen: the logo mark can now be an image via cfg.Logo (with a
@@ -71,7 +76,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.4"
+    Version = "1.4.5"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -598,10 +603,36 @@ function Kami:ShowLoadingScreen(cfg)
     Tween(Word, 0.5, { TextTransparency = 0 })
     Tween(Status, 0.4, { TextTransparency = 0 })
 
-    -- gentle breathing on the K while loading
+    -- gentle breathing on the mark while loading
     local finished = false
     local breathe = TweenService:Create(CenterScale, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.03 })
     task.delay(0.8, function() if not finished then breathe:Play() end end)
+
+    -- If the logo is an image that fails to load (Roblox blocks most external
+    -- image URLs), fall back to the big "K" so the screen never looks blank.
+    if MarkIsImage then
+        task.delay(1.2, function()
+            if finished or not Mark or not Mark.Parent or Mark.IsLoaded then return end
+            local order = Mark.LayoutOrder
+            Mark:Destroy()
+            Mark = New("TextLabel", {
+                Size = UDim2.fromOffset(300, 62),
+                BackgroundTransparency = 1,
+                Text = "K",
+                Font = Enum.Font.GothamBlack,
+                TextSize = 56,
+                TextColor3 = T.Text,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                LayoutOrder = order,
+                TextTransparency = 1,
+                Parent = Center,
+            })
+            MarkStroke = Stroke(Mark, T.Accent, 1.5)
+            MarkIsImage = false
+            Tween(Mark, 0.35, { TextTransparency = 0 })
+            Tween(MarkStroke, 0.35, { Transparency = 0 })
+        end)
+    end
 
     local pctConn = RunService.RenderStepped:Connect(function()
         Percent.Text = tostring(math.floor(BarFill.Size.X.Scale * 100 + 0.5)) .. "%"
