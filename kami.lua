@@ -1,7 +1,7 @@
 --[[
     KAMI UI - v1.0.0
     Luxury Dark & Gold Edition
-    Includes: Animated "K" Loading Screen, Profile Banner, Stat Grid.
+    Clean & Natural Language Interface
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -52,18 +52,16 @@ Screen.Parent = GetParent()
 
 if getgenv then getgenv().KamiUIInstance = Screen end
 
--- ==========================================
--- ANIMATED "K" LOADING SCREEN
--- ==========================================
+-- Loading Screen Animasi "K"
 function Kami:ShowLoadingScreen(cfg)
     cfg = cfg or {}
     local steps = cfg.Steps or {
-        "Initializing environment...",
-        "Syncing client telemetry...",
-        "Applying luxury layout...",
-        "Ready."
+        "Memeriksa executor...",
+        "Mengambil profil akun...",
+        "Memuat tampilan menu...",
+        "Selesai."
     }
-    local duration = cfg.Duration or 2.4
+    local duration = cfg.Duration or 2.2
 
     local LoadGui = Instance.new("ScreenGui")
     LoadGui.Name = "Kami_Loading"
@@ -78,7 +76,6 @@ function Kami:ShowLoadingScreen(cfg)
     Bg.BorderSizePixel = 0
     Bg.Parent = LoadGui
 
-    -- Subtle Center Box
     local Center = Instance.new("Frame")
     Center.AnchorPoint = Vector2.new(0.5, 0.5)
     Center.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -113,14 +110,13 @@ function Kami:ShowLoadingScreen(cfg)
     Status.Position = UDim2.new(0, 0, 0.65, 0)
     Status.Size = UDim2.new(1, 0, 0, 14)
     Status.BackgroundTransparency = 1
-    Status.Text = steps[1] or "Loading..."
+    Status.Text = steps[1] or "Memuat..."
     Status.Font = Enum.Font.Gotham
     Status.TextSize = 10
     Status.TextColor3 = Theme.GoldMuted
     Status.TextTransparency = 1
     Status.Parent = Center
 
-    -- Progress Line Bar
     local BarBg = Instance.new("Frame")
     BarBg.Position = UDim2.new(0.1, 0, 0.85, 0)
     BarBg.Size = UDim2.new(0.8, 0, 0, 2)
@@ -134,29 +130,26 @@ function Kami:ShowLoadingScreen(cfg)
     BarFill.BorderSizePixel = 0
     BarFill.Parent = BarBg
 
-    -- Fade In
-    TweenService:Create(KLogo, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
-    TweenService:Create(Title, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
-    TweenService:Create(Status, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
+    TweenService:Create(KLogo, TweenInfo.new(0.35), { TextTransparency = 0 }):Play()
+    TweenService:Create(Title, TweenInfo.new(0.35), { TextTransparency = 0 }):Play()
+    TweenService:Create(Status, TweenInfo.new(0.35), { TextTransparency = 0 }):Play()
 
-    -- Animasi pulsing logo "K"
     local pulsing = true
     task.spawn(function()
         while pulsing and KLogo.Parent do
-            TweenService:Create(KLogo, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { TextColor3 = Theme.Text }):Play()
-            task.wait(0.6)
+            TweenService:Create(KLogo, TweenInfo.new(0.55, Enum.EasingStyle.Sine), { TextColor3 = Theme.Text }):Play()
+            task.wait(0.55)
             if not pulsing then break end
-            TweenService:Create(KLogo, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { TextColor3 = Theme.Gold }):Play()
-            task.wait(0.6)
+            TweenService:Create(KLogo, TweenInfo.new(0.55, Enum.EasingStyle.Sine), { TextColor3 = Theme.Gold }):Play()
+            task.wait(0.55)
         end
     end)
 
-    -- Step Sequencer
     local delayPerStep = duration / #steps
     for i, stepText in ipairs(steps) do
         Status.Text = stepText
         local targetRatio = i / #steps
-        TweenService:Create(BarFill, TweenInfo.new(delayPerStep * 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        TweenService:Create(BarFill, TweenInfo.new(delayPerStep * 0.8, Enum.EasingStyle.Quad), {
             Size = UDim2.new(targetRatio, 0, 1, 0)
         }):Play()
         task.wait(delayPerStep)
@@ -164,15 +157,14 @@ function Kami:ShowLoadingScreen(cfg)
 
     pulsing = false
 
-    -- Fade Out
-    TweenService:Create(Bg, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
-    TweenService:Create(KLogo, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
-    TweenService:Create(Title, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
-    TweenService:Create(Status, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
-    TweenService:Create(BarBg, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
-    TweenService:Create(BarFill, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(Bg, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(KLogo, TweenInfo.new(0.2), { TextTransparency = 1 }):Play()
+    TweenService:Create(Title, TweenInfo.new(0.2), { TextTransparency = 1 }):Play()
+    TweenService:Create(Status, TweenInfo.new(0.2), { TextTransparency = 1 }):Play()
+    TweenService:Create(BarBg, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(BarFill, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
 
-    task.wait(0.36)
+    task.wait(0.32)
     LoadGui:Destroy()
 end
 
@@ -228,7 +220,7 @@ end)
 
 function Kami:Notify(cfg)
     cfg = cfg or {}
-    local nTitle = cfg.Title or "NOTIFICATION"
+    local nTitle = cfg.Title or "Pemberitahuan"
     local nDesc = cfg.Content or ""
     local nDur = cfg.Duration or 3
 
@@ -300,11 +292,10 @@ end
 function Kami:CreateWindow(cfg)
     cfg = cfg or {}
     local winName = cfg.Name or "KAMI"
-    local winSub = cfg.SubTitle or "luxury edition"
+    local winSub = cfg.SubTitle or "menu"
     local winSize = cfg.Size or UDim2.fromOffset(610, 420)
     local minKey = cfg.MinimizeKey or Enum.KeyCode.RightControl
 
-    -- Otomatis jalankan loading screen jika diaktifkan
     if cfg.Loading and cfg.Loading.Enabled ~= false then
         Kami:ShowLoadingScreen(cfg.Loading)
     end
@@ -452,7 +443,7 @@ function Kami:CreateWindow(cfg)
 
     function Window:AddTab(opt)
         opt = opt or {}
-        local tabTitle = opt.Title or "Tab"
+        local tabTitle = opt.Title or "Menu"
         local tabIcon = opt.Icon and Lucide[opt.Icon]
 
         local Tab = {}
@@ -638,7 +629,7 @@ function Kami:CreateWindow(cfg)
             statusSub.Position = UDim2.fromOffset(68, 42)
             statusSub.Size = UDim2.new(1, -180, 0, 14)
             statusSub.BackgroundTransparency = 1
-            statusSub.Text = c.Subtitle or "Active Client Session"
+            statusSub.Text = c.Subtitle or "Akun Aktif"
             statusSub.Font = Enum.Font.Gotham
             statusSub.TextSize = 9
             statusSub.TextColor3 = Theme.TextDull
@@ -660,7 +651,7 @@ function Kami:CreateWindow(cfg)
             local badgeText = Instance.new("TextLabel")
             badgeText.Size = UDim2.new(1, 0, 1, 0)
             badgeText.BackgroundTransparency = 1
-            badgeText.Text = c.Badge or "SYNCHRONIZED"
+            badgeText.Text = c.Badge or "ONLINE"
             badgeText.Font = Enum.Font.GothamMedium
             badgeText.TextSize = 9
             badgeText.TextColor3 = Theme.Gold
@@ -856,7 +847,7 @@ function Kami:CreateWindow(cfg)
             bAction.Position = UDim2.new(1, -87, 0.5, -11)
             bAction.BackgroundColor3 = Theme.Bg
             bAction.BorderSizePixel = 0
-            bAction.Text = c.ButtonText or "Execute"
+            bAction.Text = c.ButtonText or "Jalankan"
             bAction.Font = Enum.Font.GothamMedium
             bAction.TextSize = 10
             bAction.TextColor3 = Theme.Gold
@@ -976,7 +967,7 @@ function Kami:CreateWindow(cfg)
         -- DROPDOWN
         function Tab:AddDropdown(c)
             local values = c.Values or {}
-            local current = c.Default or values[1] or "None"
+            local current = c.Default or values[1] or "Pilih..."
             local cb = c.Callback or function() end
             local row = CreateRow(42)
             AddHeaderLabels(row, c.Title, c.Description)
@@ -1068,7 +1059,7 @@ function Kami:CreateWindow(cfg)
             box.BackgroundColor3 = Theme.Bg
             box.BorderSizePixel = 0
             box.Text = c.Default or ""
-            box.PlaceholderText = c.Placeholder or "Type here..."
+            box.PlaceholderText = c.Placeholder or "Ketik di sini..."
             box.Font = Enum.Font.Gotham
             box.TextSize = 10
             box.TextColor3 = Theme.Text
@@ -1100,10 +1091,10 @@ function Kami:CreateWindow(cfg)
 
     function Window:BuildConfigSection(settingsTab)
         if not settingsTab then return end
-        settingsTab:AddSection({ Title = "System Information" })
+        settingsTab:AddSection({ Title = "Tentang Menu" })
         settingsTab:AddParagraph({
-            Title = "Kami Framework",
-            Content = "Refined sharp luxury interface with zero-corner aesthetics.",
+            Title = "Kami UI",
+            Content = "Menu script bertema hitam & emas dengan sudut siku-siku rapi.",
         })
     end
 
