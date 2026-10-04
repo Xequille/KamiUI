@@ -1,6 +1,14 @@
 --[[
-    KAMI UI - v1.4.2
+    KAMI UI - v1.4.3
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.3 changes:
+      - Row accent: replaced the short floating tick with a full-height left
+        rail that fades softly at both ends (elegant); it brightens on hover
+      - Loading screen: the logo mark is now a bold "K" (GothamBlack, accent
+        outline) instead of the rotating box; gentler and cleaner
+      - Loading screen now returns a handle and crossfades directly into the
+        window's open animation (the UI emerges from the loading screen)
 
     v1.4.2 changes:
       - Loading screen: removed the big backdrop glow (it caused a grey haze
@@ -58,7 +66,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.2"
+    Version = "1.4.3"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -427,7 +435,6 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = GetParent(),
     })
 
-    -- solid backdrop (no big glow = no grey haze)
     local Bg = New("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = T.Bg,
@@ -438,7 +445,7 @@ function Kami:ShowLoadingScreen(cfg)
     local Center = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(300, 170),
+        Size = UDim2.fromOffset(300, 190),
         BackgroundTransparency = 1,
         Parent = Bg,
     })
@@ -448,48 +455,44 @@ function Kami:ShowLoadingScreen(cfg)
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
         VerticalAlignment = Enum.VerticalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 14),
+        Padding = UDim.new(0, 12),
         Parent = Center,
     })
 
-    -- rotating gradient logo mark (sharp square rim)
-    local Logo = New("Frame", {
-        Size = UDim2.fromOffset(22, 22),
+    -- big display "K" logo mark
+    local Mark = New("TextLabel", {
+        Size = UDim2.fromOffset(300, 62),
         BackgroundTransparency = 1,
+        Text = "K",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 56,
+        TextColor3 = T.Text,
+        TextXAlignment = Enum.TextXAlignment.Center,
         LayoutOrder = 1,
         Parent = Center,
     })
-    SpawnSpinBorder(Logo, 2, 1, 5)
-    New("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(22, 22),
-        BackgroundColor3 = T.Bg,
-        BorderSizePixel = 0,
-        ZIndex = 2,
-        Parent = Logo,
-    })
+    local MarkStroke = Stroke(Mark, T.Accent, 1.5)
 
-    -- wordmark (wide letter spacing)
-    local Mark = New("TextLabel", {
-        Size = UDim2.fromOffset(300, 30),
+    -- spaced wordmark
+    local Word = New("TextLabel", {
+        Size = UDim2.fromOffset(300, 16),
         BackgroundTransparency = 1,
         Text = Spaced(title),
         Font = Enum.Font.GothamBold,
-        TextSize = 22,
-        TextColor3 = T.Text,
+        TextSize = 12,
+        TextColor3 = T.TextMuted,
         TextXAlignment = Enum.TextXAlignment.Center,
         LayoutOrder = 2,
         Parent = Center,
     })
 
     local Status = New("TextLabel", {
-        Size = UDim2.fromOffset(300, 14),
+        Size = UDim2.fromOffset(300, 13),
         BackgroundTransparency = 1,
         Text = steps[1],
         Font = Enum.Font.Gotham,
         TextSize = 10,
-        TextColor3 = T.TextMuted,
+        TextColor3 = T.TextDull,
         TextXAlignment = Enum.TextXAlignment.Center,
         LayoutOrder = 3,
         Parent = Center,
@@ -497,7 +500,7 @@ function Kami:ShowLoadingScreen(cfg)
 
     -- thin progress bar with a moving glint
     local BarBg = New("Frame", {
-        Size = UDim2.new(0, 240, 0, 2),
+        Size = UDim2.new(0, 220, 0, 2),
         BackgroundColor3 = T.Border,
         BorderSizePixel = 0,
         LayoutOrder = 4,
@@ -531,7 +534,7 @@ function Kami:ShowLoadingScreen(cfg)
     shimmer:Play()
 
     local Percent = New("TextLabel", {
-        Size = UDim2.fromOffset(240, 12),
+        Size = UDim2.fromOffset(220, 12),
         BackgroundTransparency = 1,
         Text = "0%",
         Font = Enum.Font.Gotham,
@@ -542,7 +545,6 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = Center,
     })
 
-    -- bottom-left build tag
     local Build = New("TextLabel", {
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 22, 1, -18),
@@ -556,19 +558,28 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = Bg,
     })
 
-    -- entrance
-    CenterScale.Scale = 0.96
+    -- entrance: the K pops in
+    CenterScale.Scale = 0.9
     Mark.TextTransparency = 1
+    MarkStroke.Transparency = 1
+    Word.TextTransparency = 1
     Status.TextTransparency = 1
+    Tween(CenterScale, 0.7, { Scale = 1 }, Enum.EasingStyle.Back)
     Tween(Mark, 0.5, { TextTransparency = 0 })
+    Tween(MarkStroke, 0.5, { Transparency = 0 })
+    Tween(Word, 0.5, { TextTransparency = 0 })
     Tween(Status, 0.4, { TextTransparency = 0 })
-    Tween(CenterScale, 0.6, { Scale = 1 }, Enum.EasingStyle.Quint)
+
+    -- gentle breathing on the K while loading
+    local finished = false
+    local breathe = TweenService:Create(CenterScale, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.03 })
+    task.delay(0.8, function() if not finished then breathe:Play() end end)
 
     local pctConn = RunService.RenderStepped:Connect(function()
         Percent.Text = tostring(math.floor(BarFill.Size.X.Scale * 100 + 0.5)) .. "%"
     end)
 
-    task.wait(0.35)
+    task.wait(0.4)
 
     local delayPerStep = duration / #steps
     for i, stepText in ipairs(steps) do
@@ -582,22 +593,32 @@ function Kami:ShowLoadingScreen(cfg)
         task.wait(math.max(delayPerStep - (i > 1 and 0.12 or 0), 0.05))
     end
 
-    task.wait(0.18)
+    task.wait(0.15)
     pctConn:Disconnect()
 
-    -- outro
-    Tween(CenterScale, 0.35, { Scale = 1.03 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-    Tween(Bg, 0.35, { BackgroundTransparency = 1 })
-    Tween(Mark, 0.25, { TextTransparency = 1 })
-    Tween(Status, 0.25, { TextTransparency = 1 })
-    Tween(Percent, 0.25, { TextTransparency = 1 })
-    Tween(Build, 0.25, { TextTransparency = 1 })
-    Tween(BarBg, 0.25, { BackgroundTransparency = 1 })
-    Tween(BarFill, 0.25, { BackgroundTransparency = 1 })
-
-    task.wait(0.4)
-    shimmer:Cancel()
-    LoadGui:Destroy()
+    -- Return a handle. CreateWindow calls :Finish() together with its own open
+    -- animation, so the loading screen crossfades straight into the UI.
+    return {
+        Finish = function()
+            if finished then return end
+            finished = true
+            breathe:Cancel()
+            CenterScale.Scale = 1
+            Tween(CenterScale, 0.45, { Scale = 1.12 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            Tween(Bg, 0.5, { BackgroundTransparency = 1 })
+            Tween(Mark, 0.4, { TextTransparency = 1 })
+            Tween(MarkStroke, 0.4, { Transparency = 1 })
+            Tween(Word, 0.35, { TextTransparency = 1 })
+            Tween(Status, 0.35, { TextTransparency = 1 })
+            Tween(Percent, 0.35, { TextTransparency = 1 })
+            Tween(Build, 0.35, { TextTransparency = 1 })
+            Tween(BarBg, 0.35, { BackgroundTransparency = 1 })
+            Tween(BarFill, 0.35, { BackgroundTransparency = 1 })
+            task.wait(0.55)
+            shimmer:Cancel()
+            LoadGui:Destroy()
+        end,
+    }
 end
 
 --==================================================================
@@ -970,8 +991,9 @@ function Kami:CreateWindow(cfg)
 
     if cfg.Theme and Themes[cfg.Theme] then ApplyTheme(cfg.Theme) end
 
+    local loadingHandle = nil
     if cfg.Loading and cfg.Loading.Enabled ~= false then
-        Kami:ShowLoadingScreen(cfg.Loading)
+        loadingHandle = Kami:ShowLoadingScreen(cfg.Loading)
     end
 
     local Window = {
@@ -1336,6 +1358,10 @@ function Kami:CreateWindow(cfg)
         Tween(Shadow, 0.5, { ImageTransparency = 0.45 })
         Tween(Veil, 0.45, { BackgroundTransparency = 1 })
         task.delay(0.46, function() if Window.Visible then Veil.Visible = false end end)
+        -- crossfade the loading screen into the freshly opened UI
+        if loadingHandle and loadingHandle.Finish then
+            task.spawn(loadingHandle.Finish)
+        end
     end)
 
     --================ DRAG ================
@@ -1776,11 +1802,10 @@ function Kami:CreateWindow(cfg)
             Corner(row, 5)
             local st = Stroke(row, CurrentTheme.Border)
 
-            -- left accent stripe (subtle gradient, grows on hover)
+            -- full-height left accent rail with soft faded ends (elegant, not a floating tick)
             local rowAccent = New("Frame", {
-                AnchorPoint = Vector2.new(0, 0.5),
-                Position = UDim2.new(0, 0, 0.5, 0),
-                Size = UDim2.new(0, 2, 0, 18),
+                Position = UDim2.new(0, 0, 0, 0),
+                Size = UDim2.new(0, 2, 1, 0),
                 BackgroundColor3 = Color3.new(1, 1, 1),
                 BorderSizePixel = 0,
                 Parent = row,
@@ -1789,6 +1814,11 @@ function Kami:CreateWindow(cfg)
                 ColorSequenceKeypoint.new(0, CurrentTheme.AccentMuted),
                 ColorSequenceKeypoint.new(1, CurrentTheme.Accent),
             }), 90)
+            rowAccentGrad.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.55),
+                NumberSequenceKeypoint.new(0.5, 0.05),
+                NumberSequenceKeypoint.new(1, 0.55),
+            })
 
             RegisterPaint(function()
                 row.BackgroundColor3 = CurrentTheme.Card
@@ -1802,12 +1832,20 @@ function Kami:CreateWindow(cfg)
             row.MouseEnter:Connect(function()
                 Tween(st, 0.2, { Color = CurrentTheme.BorderHover })
                 Tween(row, 0.2, { BackgroundColor3 = CurrentTheme.CardHover })
-                Tween(rowAccent, 0.25, { Size = UDim2.new(0, 2, 0, 26) }, Enum.EasingStyle.Back)
+                Tween(rowAccentGrad, 0.25, { Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.15),
+                    NumberSequenceKeypoint.new(0.5, 0),
+                    NumberSequenceKeypoint.new(1, 0.15),
+                }) })
             end)
             row.MouseLeave:Connect(function()
                 Tween(st, 0.2, { Color = CurrentTheme.Border })
                 Tween(row, 0.2, { BackgroundColor3 = CurrentTheme.Card })
-                Tween(rowAccent, 0.25, { Size = UDim2.new(0, 2, 0, 18) })
+                Tween(rowAccentGrad, 0.25, { Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.55),
+                    NumberSequenceKeypoint.new(0.5, 0.05),
+                    NumberSequenceKeypoint.new(1, 0.55),
+                }) })
             end)
 
             return row, st
