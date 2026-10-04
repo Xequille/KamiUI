@@ -2,26 +2,21 @@
     KAMI UI - v1.0.0
     Luxury Dark & Gold Edition (Sharp Editorial Minimalist)
     Features:
-      - Full Config Management (Save, Load, Delete, Auto-Load)
-      - Keybind Selector for Toggle Key
-      - Built-in Live Themes (Obsidian Gold, Pitch Dark, Cyber Gold, Midnight Gold)
-      - Customizable Icons per Tab via Lucide ID / Image Asset
-      - Live Stats Telemetry (FPS, Ping, Uptime, Memory)
-      - Smooth Micro-interactions & Zero-Corner Styling
+      - Custom Tab Icons via rbxassetid / name
+      - Live Telemetry & System Info
+      - Post-Loading Discord Invite System
+      - Live Built-in Themes & Config Manager
 ]]
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local StatsService = game:GetService("Stats")
 
 local Kami = {
     Version = "1.0.0"
 }
 
--- Folder Penyimpanan Konfigurasi
 local CONFIG_FOLDER = "KamiUI_Configs"
 local AUTO_LOAD_FILE = "kamiui_autoload.json"
 
@@ -82,25 +77,27 @@ local Themes = {
 
 local CurrentTheme = Themes["Obsidian Gold"]
 
+-- Lucide Icon Asset IDs
 local Lucide = {
-    home = "rbxassetid://93110857987859",
-    settings = "rbxassetid://85241284670779",
-    info = "rbxassetid://92425452073561",
-    chevron = "rbxassetid://134243273101015",
-    zap = "rbxassetid://130551565616516",
-    user = "rbxassetid://81589895647169",
-    terminal = "rbxassetid://106783148545356",
-    sliders = "rbxassetid://132977703952271",
-    shield = "rbxassetid://77608084747459",
-    folder = "rbxassetid://122945524502470",
-    check = "rbxassetid://93898873302694",
+    home      = "rbxassetid://93110857987859",
+    settings  = "rbxassetid://85241284670779",
+    info      = "rbxassetid://92425452073561",
+    chevron   = "rbxassetid://134243273101015",
+    zap       = "rbxassetid://130551565616516",
+    user      = "rbxassetid://81589895647169",
+    terminal  = "rbxassetid://106783148545356",
+    sliders   = "rbxassetid://132977703952271",
+    shield    = "rbxassetid://77608084747459",
+    folder    = "rbxassetid://122945524502470",
+    discord   = "rbxassetid://102424727138621",
 }
 
 local function ResolveIcon(icon)
     if not icon then return nil end
     if type(icon) == "string" then
-        if Lucide[icon:lower()] then
-            return Lucide[icon:lower()]
+        local lower = icon:lower()
+        if Lucide[lower] then
+            return Lucide[lower]
         elseif icon:match("^rbxassetid://") then
             return icon
         elseif tonumber(icon) then
@@ -130,7 +127,6 @@ Screen.Parent = GetParent()
 
 if getgenv then getgenv().KamiUIInstance = Screen end
 
--- Theme Repainter Subsystem
 local Repainters = {}
 local function RegisterPaint(fn)
     table.insert(Repainters, fn)
@@ -318,18 +314,20 @@ UserInputService.InputBegan:Connect(function(input)
     end
 end)
 
+-- Notifikasi & Discord Prompt
 function Kami:Notify(cfg)
     cfg = cfg or {}
     local nTitle = cfg.Title or "Notification"
     local nDesc = cfg.Content or ""
     local nDur = cfg.Duration or 3
+    local actionBtn = cfg.Button
 
     local notifyHolder = Screen:FindFirstChild("NotifyHolder")
     if not notifyHolder then
         notifyHolder = Instance.new("Frame")
         notifyHolder.Name = "NotifyHolder"
-        notifyHolder.Size = UDim2.new(0, 270, 1, -20)
-        notifyHolder.Position = UDim2.new(1, -280, 0, 10)
+        notifyHolder.Size = UDim2.new(0, 280, 1, -20)
+        notifyHolder.Position = UDim2.new(1, -290, 0, 10)
         notifyHolder.BackgroundTransparency = 1
         notifyHolder.Parent = Screen
 
@@ -380,6 +378,28 @@ function Kami:Notify(cfg)
     descLbl.TextWrapped = true
     descLbl.Parent = card
 
+    if actionBtn then
+        local act = Instance.new("TextButton")
+        act.Size = UDim2.new(1, 0, 0, 22)
+        act.Position = UDim2.new(0, 0, 0, 36)
+        act.BackgroundColor3 = CurrentTheme.Bg
+        act.BorderSizePixel = 0
+        act.Text = actionBtn.Text or "Open"
+        act.Font = Enum.Font.GothamMedium
+        act.TextSize = 10
+        act.TextColor3 = CurrentTheme.Gold
+        act.Parent = card
+
+        local actStroke = Instance.new("UIStroke")
+        actStroke.Color = CurrentTheme.BorderHover
+        actStroke.Thickness = 1
+        actStroke.Parent = act
+
+        act.MouseButton1Click:Connect(function()
+            if actionBtn.Callback then actionBtn.Callback() end
+        end)
+    end
+
     task.delay(nDur, function()
         if card and card.Parent then
             local tw = TweenService:Create(card, TweenInfo.new(0.2), { BackgroundTransparency = 1 })
@@ -398,6 +418,30 @@ function Kami:CreateWindow(cfg)
 
     if cfg.Loading and cfg.Loading.Enabled ~= false then
         Kami:ShowLoadingScreen(cfg.Loading)
+    end
+
+    -- Trigger Discord Notice Pasca Loading
+    if cfg.Discord and cfg.Discord.Enabled then
+        task.delay(0.2, function()
+            local inviteUrl = cfg.Discord.Invite:match("^https?://") and cfg.Discord.Invite or ("https://discord.gg/" .. cfg.Discord.Invite)
+            Kami:Notify({
+                Title = "Discord Community",
+                Content = cfg.Discord.Note or "Join our official community server for updates.",
+                Duration = 6,
+                Button = {
+                    Text = "Copy Invite Link",
+                    Callback = function()
+                        if setclipboard then
+                            setclipboard(inviteUrl)
+                            Kami:Notify({ Title = "Copied", Content = "Discord link copied to clipboard!", Duration = 2 })
+                        elseif toclipboard then
+                            toclipboard(inviteUrl)
+                            Kami:Notify({ Title = "Copied", Content = "Discord link copied to clipboard!", Duration = 2 })
+                        end
+                    end
+                }
+            })
+        end)
     end
 
     local Window = {
@@ -567,7 +611,7 @@ function Kami:CreateWindow(cfg)
     ContentHolder.ClipsDescendants = true
     ContentHolder.Parent = MainFrame
 
-    -- Config Management Core Logic
+    -- Config System
     local function GetConfigList()
         if not listfiles or not isfolder then return { "default" } end
         if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
@@ -620,7 +664,7 @@ function Kami:CreateWindow(cfg)
         return false
     end
 
-    -- Tab Builder
+    -- Tab Builder (Dengan Image Rendering Pasti Muncul)
     function Window:AddTab(opt)
         opt = opt or {}
         local tabTitle = opt.Title or "Tab"
@@ -628,7 +672,7 @@ function Kami:CreateWindow(cfg)
 
         local Tab = {}
         local TabBtn = Instance.new("TextButton")
-        TabBtn.Size = UDim2.new(1, 0, 0, 28)
+        TabBtn.Size = UDim2.new(1, 0, 0, 30)
         TabBtn.BackgroundColor3 = CurrentTheme.Card
         TabBtn.BackgroundTransparency = 1
         TabBtn.BorderSizePixel = 0
@@ -637,8 +681,8 @@ function Kami:CreateWindow(cfg)
         TabBtn.Parent = NavScroll
 
         local TabIndicator = Instance.new("Frame")
-        TabIndicator.Size = UDim2.new(0, 2, 0, 12)
-        TabIndicator.Position = UDim2.new(0, 2, 0.5, -6)
+        TabIndicator.Size = UDim2.new(0, 2, 0, 14)
+        TabIndicator.Position = UDim2.new(0, 2, 0.5, -7)
         TabIndicator.BackgroundColor3 = CurrentTheme.Gold
         TabIndicator.BorderSizePixel = 0
         TabIndicator.Visible = false
@@ -648,13 +692,13 @@ function Kami:CreateWindow(cfg)
         local iconImg = nil
         if tabIcon then
             iconImg = Instance.new("ImageLabel")
-            iconImg.Size = UDim2.fromOffset(13, 13)
-            iconImg.Position = UDim2.new(0, 10, 0.5, -6)
+            iconImg.Size = UDim2.fromOffset(14, 14)
+            iconImg.Position = UDim2.new(0, 10, 0.5, -7)
             iconImg.BackgroundTransparency = 1
             iconImg.Image = tabIcon
             iconImg.ImageColor3 = CurrentTheme.TextMuted
             iconImg.Parent = TabBtn
-            textOffset = 28
+            textOffset = 30
         end
 
         local TabLbl = Instance.new("TextLabel")
@@ -1466,7 +1510,7 @@ function Kami:CreateWindow(cfg)
         return Tab
     end
 
-    -- BuildConfigSection: Lengkap dengan Settings, Keybind, Config & Live Themes
+    -- BuildConfigSection
     function Window:BuildConfigSection(settingsTab)
         if not settingsTab then return end
 
@@ -1529,7 +1573,7 @@ function Kami:CreateWindow(cfg)
                 else
                     Kami:Notify({
                         Title = "Save Error",
-                        Content = "Failed to save. Executor missing file write permission.",
+                        Content = "Failed to save. Executor missing write permission.",
                         Duration = 3
                     })
                 end
@@ -1591,7 +1635,6 @@ function Kami:CreateWindow(cfg)
         })
     end
 
-    -- Auto-Load Check on Startup
     task.spawn(function()
         if isfile and isfile(AUTO_LOAD_FILE) then
             pcall(function()
