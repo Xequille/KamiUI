@@ -1,6 +1,13 @@
 --[[
-    KAMI UI - v1.4.5
+    KAMI UI - v1.4.6
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.6 changes:
+      - Dropdown: added a soft 9-slice drop shadow, a cleaner check-mark for
+        the selected item, taller rows and smarter on-screen clamping so the
+        floating list never clips off the edge
+      - Loading screen: thin full-width progress line pinned to the bottom
+        edge, plus animated dots on the status text
 
     v1.4.5 changes:
       - Loading screen: if cfg.Logo is an image that fails to load (Roblox
@@ -76,7 +83,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.5"
+    Version = "1.4.6"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -592,6 +599,21 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = Bg,
     })
 
+    -- thin full-width progress line pinned to the bottom edge
+    local BottomLine = New("Frame", {
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 0, 1, 0),
+        Size = UDim2.new(0, 0, 0, 2),
+        BackgroundColor3 = T.Accent,
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = Bg,
+    })
+    AddGradient(BottomLine, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, T.AccentMuted),
+        ColorSequenceKeypoint.new(1, T.Accent),
+    }), 0)
+
     -- entrance: the mark pops in
     CenterScale.Scale = 0.9
     if MarkIsImage then Mark.ImageTransparency = 1 else Mark.TextTransparency = 1 end
@@ -635,23 +657,39 @@ function Kami:ShowLoadingScreen(cfg)
     end
 
     local pctConn = RunService.RenderStepped:Connect(function()
-        Percent.Text = tostring(math.floor(BarFill.Size.X.Scale * 100 + 0.5)) .. "%"
+        local prog = BarFill.Size.X.Scale
+        Percent.Text = tostring(math.floor(prog * 100 + 0.5)) .. "%"
+        BottomLine.Size = UDim2.new(prog, 0, 0, 2)
     end)
 
     task.wait(0.4)
 
     local delayPerStep = duration / #steps
+    local currentBase = (steps[1]:gsub("[%.%s]+$", ""))
+    local dotN, dotAcc = 0, 0
+    local dotsConn = RunService.RenderStepped:Connect(function(dt)
+        dotAcc = dotAcc + dt
+        if dotAcc >= 0.33 then
+            dotAcc = 0
+            dotN = (dotN % 3) + 1
+            Status.Text = currentBase .. string.rep(".", dotN)
+        end
+    end)
+
     for i, stepText in ipairs(steps) do
         if i > 1 then
             Tween(Status, 0.12, { TextTransparency = 1 })
             task.wait(0.12)
         end
-        Status.Text = stepText
+        currentBase = (stepText:gsub("[%.%s]+$", ""))
+        Status.Text = currentBase
         Tween(Status, 0.18, { TextTransparency = 0 })
         Tween(BarFill, delayPerStep * 0.85, { Size = UDim2.new(i / #steps, 0, 1, 0) }, Enum.EasingStyle.Quad)
         task.wait(math.max(delayPerStep - (i > 1 and 0.12 or 0), 0.05))
     end
 
+    dotsConn:Disconnect()
+    Status.Text = (steps[#steps]:gsub("[%.%s]+$", ""))
     task.wait(0.15)
     pctConn:Disconnect()
 
@@ -673,6 +711,7 @@ function Kami:ShowLoadingScreen(cfg)
             Tween(Build, 0.35, { TextTransparency = 1 })
             Tween(BarBg, 0.35, { BackgroundTransparency = 1 })
             Tween(BarFill, 0.35, { BackgroundTransparency = 1 })
+            Tween(BottomLine, 0.35, { BackgroundTransparency = 1 })
             task.wait(0.55)
             shimmer:Cancel()
             LoadGui:Destroy()
@@ -694,6 +733,36 @@ local GlobalDropdown = New("Frame", {
 })
 Corner(GlobalDropdown, 5)
 local DropStroke = Stroke(GlobalDropdown, CurrentTheme.BorderHover)
+
+-- soft 9-slice drop shadow behind the floating dropdown (mirrors Position/Size)
+local DropShadow = New("ImageLabel", {
+    BackgroundTransparency = 1,
+    Image = "rbxassetid://6014261993",
+    ImageColor3 = Color3.new(0, 0, 0),
+    ImageTransparency = 1,
+    ScaleType = Enum.ScaleType.Slice,
+    SliceCenter = Rect.new(49, 49, 450, 450),
+    ZIndex = 99,
+    Visible = false,
+    Parent = Screen,
+})
+local function SyncDropShadow()
+    DropShadow.Position = UDim2.new(
+        GlobalDropdown.Position.X.Scale, GlobalDropdown.Position.X.Offset - 6,
+        GlobalDropdown.Position.Y.Scale, GlobalDropdown.Position.Y.Offset + 3
+    )
+    DropShadow.Size = UDim2.new(
+        GlobalDropdown.Size.X.Scale, GlobalDropdown.Size.X.Offset + 12,
+        GlobalDropdown.Size.Y.Scale, GlobalDropdown.Size.Y.Offset + 8
+    )
+end
+GlobalDropdown:GetPropertyChangedSignal("Position"):Connect(SyncDropShadow)
+GlobalDropdown:GetPropertyChangedSignal("Size"):Connect(SyncDropShadow)
+GlobalDropdown:GetPropertyChangedSignal("Visible"):Connect(function()
+    DropShadow.Visible = GlobalDropdown.Visible
+    if not GlobalDropdown.Visible then DropShadow.ImageTransparency = 1 end
+end)
+SyncDropShadow()
 
 local DropSearch = New("TextBox", {
     Name = "DropSearch",
@@ -754,6 +823,7 @@ local function CloseDropdown()
     DropSearch.Visible = false
     if owner.OnClose then pcall(owner.OnClose) end
     Tween(GlobalDropdown, 0.18, { Size = UDim2.fromOffset(GlobalDropdown.Size.X.Offset, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    Tween(DropShadow, 0.18, { ImageTransparency = 1 })
     task.delay(0.19, function()
         if not CurrentDropdown then GlobalDropdown.Visible = false end
     end)
@@ -2922,7 +2992,7 @@ function Kami:CreateWindow(cfg)
                     shown = shown + 1
                     local selected = IsSelected(val)
                     local item = New("TextButton", {
-                        Size = UDim2.new(1, 0, 0, 24),
+                        Size = UDim2.new(1, 0, 0, 26),
                         BackgroundColor3 = T.CardHover,
                         BackgroundTransparency = selected and 0 or 1,
                         BorderSizePixel = 0,
@@ -2934,7 +3004,7 @@ function Kami:CreateWindow(cfg)
                     })
                     Corner(item, 3)
 
-                    local leftPad = (multi or selected) and 22 or 8
+                    local leftPad = (multi or selected) and 24 or 10
                     if multi then
                         local box = New("Frame", {
                             AnchorPoint = Vector2.new(0, 0.5),
@@ -2959,12 +3029,15 @@ function Kami:CreateWindow(cfg)
                             })
                         end
                     elseif selected then
-                        New("Frame", {
+                        New("TextLabel", {
                             AnchorPoint = Vector2.new(0, 0.5),
                             Position = UDim2.new(0, 7, 0.5, 0),
-                            Size = UDim2.fromOffset(4, 4),
-                            BackgroundColor3 = T.Accent,
-                            BorderSizePixel = 0,
+                            Size = UDim2.fromOffset(14, 14),
+                            BackgroundTransparency = 1,
+                            Text = "✓",
+                            Font = Enum.Font.GothamBold,
+                            TextSize = 11,
+                            TextColor3 = T.Accent,
                             ZIndex = 102,
                             Parent = item,
                         })
@@ -2976,7 +3049,7 @@ function Kami:CreateWindow(cfg)
                         BackgroundTransparency = 1,
                         Text = label,
                         Font = selected and Enum.Font.GothamMedium or Enum.Font.Gotham,
-                        TextSize = 10,
+                        TextSize = 11,
                         TextColor3 = selected and T.Text or T.TextMuted,
                         TextTransparency = 1,
                         TextXAlignment = Enum.TextXAlignment.Left,
@@ -3048,18 +3121,25 @@ function Kami:CreateWindow(cfg)
                 end
 
                 local shown = BuildItems("")
-                local listH = math.min(math.max(shown, 1) * 26, 26 * 6) + 8
+                local listH = math.min(math.max(shown, 1) * 28, 28 * 6) + 8
                 local h = listH + searchH
-                local w = math.max(dropBtn.AbsoluteSize.X, searchable and 160 or 136)
+                local w = math.max(dropBtn.AbsoluteSize.X, searchable and 170 or 150)
                 local x = dropBtn.AbsolutePosition.X
-                local y = dropBtn.AbsolutePosition.Y + dropBtn.AbsoluteSize.Y + 4
-                if y + h > Screen.AbsoluteSize.Y - 8 then
-                    y = dropBtn.AbsolutePosition.Y - h - 4
+                local y = dropBtn.AbsolutePosition.Y + dropBtn.AbsoluteSize.Y + 6
+                if x + w > Screen.AbsoluteSize.X - 8 then
+                    x = Screen.AbsoluteSize.X - w - 8
                 end
+                if x < 8 then x = 8 end
+                if y + h > Screen.AbsoluteSize.Y - 8 then
+                    y = dropBtn.AbsolutePosition.Y - h - 6
+                end
+                if y < 8 then y = 8 end
 
                 GlobalDropdown.Position = UDim2.fromOffset(x, y)
                 GlobalDropdown.Size = UDim2.fromOffset(w, 0)
                 GlobalDropdown.Visible = true
+                DropShadow.ImageTransparency = 0.95
+                Tween(DropShadow, 0.3, { ImageTransparency = 0.45 })
                 Tween(GlobalDropdown, 0.32, { Size = UDim2.fromOffset(w, h) })
                 Tween(dChevron, 0.3, { Rotation = 180, ImageColor3 = CurrentTheme.Accent })
                 Tween(dStroke, 0.2, { Color = CurrentTheme.Accent })
