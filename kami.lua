@@ -1,7 +1,7 @@
 --[[
     KAMI UI - v1.0.0
-    Luxury Dark & Gold Edition (Sharp Editorial Look)
-    Features: Profile Banner, Image Avatar, Stat Grids, Zero Curves.
+    Luxury Dark & Gold Edition
+    Includes: Animated "K" Loading Screen, Profile Banner, Stat Grid.
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -51,6 +51,130 @@ Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 Screen.Parent = GetParent()
 
 if getgenv then getgenv().KamiUIInstance = Screen end
+
+-- ==========================================
+-- ANIMATED "K" LOADING SCREEN
+-- ==========================================
+function Kami:ShowLoadingScreen(cfg)
+    cfg = cfg or {}
+    local steps = cfg.Steps or {
+        "Initializing environment...",
+        "Syncing client telemetry...",
+        "Applying luxury layout...",
+        "Ready."
+    }
+    local duration = cfg.Duration or 2.4
+
+    local LoadGui = Instance.new("ScreenGui")
+    LoadGui.Name = "Kami_Loading"
+    LoadGui.ResetOnSpawn = false
+    LoadGui.IgnoreGuiInset = true
+    LoadGui.DisplayOrder = 999
+    LoadGui.Parent = GetParent()
+
+    local Bg = Instance.new("Frame")
+    Bg.Size = UDim2.new(1, 0, 1, 0)
+    Bg.BackgroundColor3 = Theme.Bg
+    Bg.BorderSizePixel = 0
+    Bg.Parent = LoadGui
+
+    -- Subtle Center Box
+    local Center = Instance.new("Frame")
+    Center.AnchorPoint = Vector2.new(0.5, 0.5)
+    Center.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Center.Size = UDim2.fromOffset(300, 180)
+    Center.BackgroundTransparency = 1
+    Center.Parent = Bg
+
+    local KLogo = Instance.new("TextLabel")
+    KLogo.AnchorPoint = Vector2.new(0.5, 0.5)
+    KLogo.Position = UDim2.new(0.5, 0, 0.25, 0)
+    KLogo.Size = UDim2.fromOffset(50, 50)
+    KLogo.BackgroundTransparency = 1
+    KLogo.Text = "K"
+    KLogo.Font = Enum.Font.GothamBold
+    KLogo.TextSize = 42
+    KLogo.TextColor3 = Theme.Gold
+    KLogo.TextTransparency = 1
+    KLogo.Parent = Center
+
+    local Title = Instance.new("TextLabel")
+    Title.Position = UDim2.new(0, 0, 0.52, 0)
+    Title.Size = UDim2.new(1, 0, 0, 16)
+    Title.BackgroundTransparency = 1
+    Title.Text = (cfg.Title or "KAMI UI"):upper()
+    Title.Font = Enum.Font.GothamMedium
+    Title.TextSize = 11
+    Title.TextColor3 = Theme.Text
+    Title.TextTransparency = 1
+    Title.Parent = Center
+
+    local Status = Instance.new("TextLabel")
+    Status.Position = UDim2.new(0, 0, 0.65, 0)
+    Status.Size = UDim2.new(1, 0, 0, 14)
+    Status.BackgroundTransparency = 1
+    Status.Text = steps[1] or "Loading..."
+    Status.Font = Enum.Font.Gotham
+    Status.TextSize = 10
+    Status.TextColor3 = Theme.GoldMuted
+    Status.TextTransparency = 1
+    Status.Parent = Center
+
+    -- Progress Line Bar
+    local BarBg = Instance.new("Frame")
+    BarBg.Position = UDim2.new(0.1, 0, 0.85, 0)
+    BarBg.Size = UDim2.new(0.8, 0, 0, 2)
+    BarBg.BackgroundColor3 = Theme.Border
+    BarBg.BorderSizePixel = 0
+    BarBg.Parent = Center
+
+    local BarFill = Instance.new("Frame")
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    BarFill.BackgroundColor3 = Theme.Gold
+    BarFill.BorderSizePixel = 0
+    BarFill.Parent = BarBg
+
+    -- Fade In
+    TweenService:Create(KLogo, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
+    TweenService:Create(Title, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
+    TweenService:Create(Status, TweenInfo.new(0.4), { TextTransparency = 0 }):Play()
+
+    -- Animasi pulsing logo "K"
+    local pulsing = true
+    task.spawn(function()
+        while pulsing and KLogo.Parent do
+            TweenService:Create(KLogo, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { TextColor3 = Theme.Text }):Play()
+            task.wait(0.6)
+            if not pulsing then break end
+            TweenService:Create(KLogo, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { TextColor3 = Theme.Gold }):Play()
+            task.wait(0.6)
+        end
+    end)
+
+    -- Step Sequencer
+    local delayPerStep = duration / #steps
+    for i, stepText in ipairs(steps) do
+        Status.Text = stepText
+        local targetRatio = i / #steps
+        TweenService:Create(BarFill, TweenInfo.new(delayPerStep * 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(targetRatio, 0, 1, 0)
+        }):Play()
+        task.wait(delayPerStep)
+    end
+
+    pulsing = false
+
+    -- Fade Out
+    TweenService:Create(Bg, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(KLogo, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+    TweenService:Create(Title, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+    TweenService:Create(Status, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+    TweenService:Create(BarBg, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(BarFill, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+
+    task.wait(0.36)
+    LoadGui:Destroy()
+end
 
 -- Global Dropdown
 local GlobalDropdown = Instance.new("Frame")
@@ -179,6 +303,11 @@ function Kami:CreateWindow(cfg)
     local winSub = cfg.SubTitle or "luxury edition"
     local winSize = cfg.Size or UDim2.fromOffset(610, 420)
     local minKey = cfg.MinimizeKey or Enum.KeyCode.RightControl
+
+    -- Otomatis jalankan loading screen jika diaktifkan
+    if cfg.Loading and cfg.Loading.Enabled ~= false then
+        Kami:ShowLoadingScreen(cfg.Loading)
+    end
 
     local Window = { Tabs = {}, CurrentTab = nil }
 
@@ -456,7 +585,7 @@ function Kami:CreateWindow(cfg)
             end
         end
 
-        -- PROFILE / AVATAR CARD (Khusus Tampilan Mewah)
+        -- PROFILE CARD
         function Tab:AddProfileCard(c)
             c = c or {}
             local card = Instance.new("Frame")
@@ -470,7 +599,6 @@ function Kami:CreateWindow(cfg)
             cStroke.Thickness = 1
             cStroke.Parent = card
 
-            -- Avatar Image Thumbnail
             local avatarImg = Instance.new("ImageLabel")
             avatarImg.Size = UDim2.fromOffset(48, 48)
             avatarImg.Position = UDim2.fromOffset(10, 10)
@@ -484,7 +612,6 @@ function Kami:CreateWindow(cfg)
             aStroke.Thickness = 1
             aStroke.Parent = avatarImg
 
-            -- Display Name & Username
             local dName = Instance.new("TextLabel")
             dName.Position = UDim2.fromOffset(68, 12)
             dName.Size = UDim2.new(1, -180, 0, 16)
@@ -518,7 +645,6 @@ function Kami:CreateWindow(cfg)
             statusSub.TextXAlignment = Enum.TextXAlignment.Left
             statusSub.Parent = card
 
-            -- Executor Badge di pojok kanan kartu
             local badge = Instance.new("Frame")
             badge.Size = UDim2.fromOffset(100, 24)
             badge.Position = UDim2.new(1, -110, 0.5, -12)
@@ -541,7 +667,7 @@ function Kami:CreateWindow(cfg)
             badgeText.Parent = badge
         end
 
-        -- STAT GRID CARD (2 Kolom Info Presisi)
+        -- STAT GRID
         function Tab:AddStatGrid(items)
             items = items or {}
             local gridH = math.ceil(#items / 2) * 44 + ((math.ceil(#items / 2) - 1) * 6)
