@@ -1,29 +1,30 @@
 --[[
     KAMI UI - v1.0.0
-    Luxury Dark & Gold Edition
-    Refined Minimalist Interface
+    Luxury Dark & Gold Edition (Sharp Editorial Look)
+    Features: Profile Banner, Image Avatar, Stat Grids, Zero Curves.
 ]]
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
 
 local Kami = {
     Version = "1.0.0"
 }
 
 local Theme = {
-    Bg          = Color3.fromRGB(10, 10, 11),
-    Sidebar     = Color3.fromRGB(13, 13, 15),
-    Card        = Color3.fromRGB(15, 15, 17),
-    CardHover   = Color3.fromRGB(19, 19, 22),
-    Border      = Color3.fromRGB(32, 30, 26),
-    BorderHover = Color3.fromRGB(55, 50, 40),
+    Bg          = Color3.fromRGB(8, 8, 9),
+    Sidebar     = Color3.fromRGB(11, 11, 13),
+    Card        = Color3.fromRGB(14, 14, 16),
+    CardHover   = Color3.fromRGB(18, 18, 21),
+    Border      = Color3.fromRGB(28, 26, 22),
+    BorderHover = Color3.fromRGB(65, 58, 42),
     Gold        = Color3.fromRGB(212, 175, 55),
-    GoldMuted   = Color3.fromRGB(140, 115, 45),
-    Text        = Color3.fromRGB(240, 238, 233),
-    TextDark    = Color3.fromRGB(130, 126, 118),
-    TextDull    = Color3.fromRGB(85, 82, 76),
+    GoldMuted   = Color3.fromRGB(130, 105, 38),
+    Text        = Color3.fromRGB(245, 243, 238),
+    TextMuted   = Color3.fromRGB(140, 136, 128),
+    TextDull    = Color3.fromRGB(80, 77, 72),
 }
 
 local Lucide = {
@@ -111,8 +112,8 @@ function Kami:Notify(cfg)
     if not notifyHolder then
         notifyHolder = Instance.new("Frame")
         notifyHolder.Name = "NotifyHolder"
-        notifyHolder.Size = UDim2.new(0, 260, 1, -20)
-        notifyHolder.Position = UDim2.new(1, -270, 0, 10)
+        notifyHolder.Size = UDim2.new(0, 270, 1, -20)
+        notifyHolder.Position = UDim2.new(1, -280, 0, 10)
         notifyHolder.BackgroundTransparency = 1
         notifyHolder.Parent = Screen
 
@@ -176,7 +177,7 @@ function Kami:CreateWindow(cfg)
     cfg = cfg or {}
     local winName = cfg.Name or "KAMI"
     local winSub = cfg.SubTitle or "luxury edition"
-    local winSize = cfg.Size or UDim2.fromOffset(590, 400)
+    local winSize = cfg.Size or UDim2.fromOffset(610, 420)
     local minKey = cfg.MinimizeKey or Enum.KeyCode.RightControl
 
     local Window = { Tabs = {}, CurrentTab = nil }
@@ -196,7 +197,7 @@ function Kami:CreateWindow(cfg)
     MainStroke.Thickness = 1
     MainStroke.Parent = MainFrame
 
-    -- Header Bar
+    -- Header
     local Header = Instance.new("Frame")
     Header.Name = "Header"
     Header.Size = UDim2.new(1, 0, 0, 36)
@@ -224,7 +225,7 @@ function Kami:CreateWindow(cfg)
     TitleLabel.Position = UDim2.fromOffset(34, 0)
     TitleLabel.Size = UDim2.new(1, -90, 1, 0)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text = string.format("<b>%s</b>  <font color=\"#504C44\">/  %s</font>", winName:upper(), winSub)
+    TitleLabel.Text = string.format("<b>%s</b>  <font color=\"#48453E\">/  %s</font>", winName:upper(), winSub)
     TitleLabel.RichText = true
     TitleLabel.Font = Enum.Font.Gotham
     TitleLabel.TextSize = 11
@@ -239,7 +240,7 @@ function Kami:CreateWindow(cfg)
     MinBtn.Text = "—"
     MinBtn.Font = Enum.Font.Gotham
     MinBtn.TextSize = 11
-    MinBtn.TextColor3 = Theme.TextDark
+    MinBtn.TextColor3 = Theme.TextMuted
     MinBtn.Parent = Header
 
     local isMinimized = false
@@ -253,7 +254,7 @@ function Kami:CreateWindow(cfg)
         if not proc and inp.KeyCode == minKey then ToggleMin() end
     end)
 
-    -- Draggable
+    -- Dragging
     local dragging, dragStart, startPos = false, nil, nil
     Header.InputBegan:Connect(function(inp)
         if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
@@ -350,7 +351,7 @@ function Kami:CreateWindow(cfg)
             iconImg.Position = UDim2.new(0, 10, 0.5, -6)
             iconImg.BackgroundTransparency = 1
             iconImg.Image = tabIcon
-            iconImg.ImageColor3 = Theme.TextDark
+            iconImg.ImageColor3 = Theme.TextMuted
             iconImg.Parent = TabBtn
             textOffset = 28
         end
@@ -362,7 +363,7 @@ function Kami:CreateWindow(cfg)
         TabLbl.Text = tabTitle
         TabLbl.Font = Enum.Font.GothamMedium
         TabLbl.TextSize = 11
-        TabLbl.TextColor3 = Theme.TextDark
+        TabLbl.TextColor3 = Theme.TextMuted
         TabLbl.TextXAlignment = Enum.TextXAlignment.Left
         TabLbl.Parent = TabBtn
 
@@ -391,7 +392,7 @@ function Kami:CreateWindow(cfg)
             for _, t in ipairs(Window.Tabs) do
                 t.Page.Visible = false
                 t.Indicator.Visible = false
-                t.Label.TextColor3 = Theme.TextDark
+                t.Label.TextColor3 = Theme.TextMuted
                 t.Button.BackgroundTransparency = 1
             end
             Page.Visible = true
@@ -449,9 +450,144 @@ function Kami:CreateWindow(cfg)
                 d.Text = desc
                 d.Font = Enum.Font.Gotham
                 d.TextSize = 10
-                d.TextColor3 = Theme.TextDark
+                d.TextColor3 = Theme.TextMuted
                 d.TextXAlignment = Enum.TextXAlignment.Left
                 d.Parent = row
+            end
+        end
+
+        -- PROFILE / AVATAR CARD (Khusus Tampilan Mewah)
+        function Tab:AddProfileCard(c)
+            c = c or {}
+            local card = Instance.new("Frame")
+            card.Size = UDim2.new(1, 0, 0, 68)
+            card.BackgroundColor3 = Theme.Card
+            card.BorderSizePixel = 0
+            card.Parent = Page
+
+            local cStroke = Instance.new("UIStroke")
+            cStroke.Color = Theme.BorderHover
+            cStroke.Thickness = 1
+            cStroke.Parent = card
+
+            -- Avatar Image Thumbnail
+            local avatarImg = Instance.new("ImageLabel")
+            avatarImg.Size = UDim2.fromOffset(48, 48)
+            avatarImg.Position = UDim2.fromOffset(10, 10)
+            avatarImg.BackgroundColor3 = Theme.Bg
+            avatarImg.BorderSizePixel = 0
+            avatarImg.Image = c.Image or ""
+            avatarImg.Parent = card
+
+            local aStroke = Instance.new("UIStroke")
+            aStroke.Color = Theme.GoldMuted
+            aStroke.Thickness = 1
+            aStroke.Parent = avatarImg
+
+            -- Display Name & Username
+            local dName = Instance.new("TextLabel")
+            dName.Position = UDim2.fromOffset(68, 12)
+            dName.Size = UDim2.new(1, -180, 0, 16)
+            dName.BackgroundTransparency = 1
+            dName.Text = c.DisplayName or "User"
+            dName.Font = Enum.Font.GothamBold
+            dName.TextSize = 13
+            dName.TextColor3 = Theme.Gold
+            dName.TextXAlignment = Enum.TextXAlignment.Left
+            dName.Parent = card
+
+            local uName = Instance.new("TextLabel")
+            uName.Position = UDim2.fromOffset(68, 28)
+            uName.Size = UDim2.new(1, -180, 0, 14)
+            uName.BackgroundTransparency = 1
+            uName.Text = "@" .. (c.Username or "username")
+            uName.Font = Enum.Font.Gotham
+            uName.TextSize = 10
+            uName.TextColor3 = Theme.TextMuted
+            uName.TextXAlignment = Enum.TextXAlignment.Left
+            uName.Parent = card
+
+            local statusSub = Instance.new("TextLabel")
+            statusSub.Position = UDim2.fromOffset(68, 42)
+            statusSub.Size = UDim2.new(1, -180, 0, 14)
+            statusSub.BackgroundTransparency = 1
+            statusSub.Text = c.Subtitle or "Active Client Session"
+            statusSub.Font = Enum.Font.Gotham
+            statusSub.TextSize = 9
+            statusSub.TextColor3 = Theme.TextDull
+            statusSub.TextXAlignment = Enum.TextXAlignment.Left
+            statusSub.Parent = card
+
+            -- Executor Badge di pojok kanan kartu
+            local badge = Instance.new("Frame")
+            badge.Size = UDim2.fromOffset(100, 24)
+            badge.Position = UDim2.new(1, -110, 0.5, -12)
+            badge.BackgroundColor3 = Theme.Bg
+            badge.BorderSizePixel = 0
+            badge.Parent = card
+
+            local bStroke = Instance.new("UIStroke")
+            bStroke.Color = Theme.Border
+            bStroke.Thickness = 1
+            bStroke.Parent = badge
+
+            local badgeText = Instance.new("TextLabel")
+            badgeText.Size = UDim2.new(1, 0, 1, 0)
+            badgeText.BackgroundTransparency = 1
+            badgeText.Text = c.Badge or "SYNCHRONIZED"
+            badgeText.Font = Enum.Font.GothamMedium
+            badgeText.TextSize = 9
+            badgeText.TextColor3 = Theme.Gold
+            badgeText.Parent = badge
+        end
+
+        -- STAT GRID CARD (2 Kolom Info Presisi)
+        function Tab:AddStatGrid(items)
+            items = items or {}
+            local gridH = math.ceil(#items / 2) * 44 + ((math.ceil(#items / 2) - 1) * 6)
+            local gridHolder = Instance.new("Frame")
+            gridHolder.Size = UDim2.new(1, 0, 0, gridH)
+            gridHolder.BackgroundTransparency = 1
+            gridHolder.Parent = Page
+
+            local gLay = Instance.new("UIGridLayout")
+            gLay.CellSize = UDim2.new(0.5, -3, 0, 44)
+            gLay.CellPadding = UDim2.fromOffset(6, 6)
+            gLay.Parent = gridHolder
+
+            for _, stat in ipairs(items) do
+                local sCard = Instance.new("Frame")
+                sCard.BackgroundColor3 = Theme.Card
+                sCard.BorderSizePixel = 0
+                sCard.Parent = gridHolder
+
+                local sStroke = Instance.new("UIStroke")
+                sStroke.Color = Theme.Border
+                sStroke.Thickness = 1
+                sStroke.Parent = sCard
+
+                local sKey = Instance.new("TextLabel")
+                sKey.Position = UDim2.fromOffset(10, 6)
+                sKey.Size = UDim2.new(1, -20, 0, 12)
+                sKey.BackgroundTransparency = 1
+                sKey.Text = string.upper(stat.Title or "")
+                sKey.Font = Enum.Font.GothamMedium
+                sKey.TextSize = 9
+                sKey.TextColor3 = Theme.GoldMuted
+                sKey.TextXAlignment = Enum.TextXAlignment.Left
+                sKey.Parent = sCard
+
+                local sVal = Instance.new("TextLabel")
+                sVal.Position = UDim2.fromOffset(10, 20)
+                sVal.Size = UDim2.new(1, -20, 0, 18)
+                sVal.BackgroundTransparency = 1
+                sVal.Text = stat.Value or "-"
+                sVal.Font = Enum.Font.Gotham
+                sVal.TextSize = 11
+                sVal.TextColor3 = Theme.Text
+                sVal.TextXAlignment = Enum.TextXAlignment.Left
+                sVal.TextTruncate = Enum.TextTruncate.AtEnd
+                sVal.Parent = sCard
             end
         end
 
@@ -529,7 +665,7 @@ function Kami:CreateWindow(cfg)
                 pc.Text = c.Content
                 pc.Font = Enum.Font.Gotham
                 pc.TextSize = 10
-                pc.TextColor3 = Theme.TextDark
+                pc.TextColor3 = Theme.TextMuted
                 pc.TextXAlignment = Enum.TextXAlignment.Left
                 pc.TextWrapped = true
                 pc.Parent = pRow
@@ -544,8 +680,8 @@ function Kami:CreateWindow(cfg)
             AddHeaderLabels(row, c.Title, c.Description)
 
             local box = Instance.new("Frame")
-            box.Size = UDim2.fromOffset(32, 16)
-            box.Position = UDim2.new(1, -44, 0.5, -8)
+            box.Size = UDim2.fromOffset(30, 16)
+            box.Position = UDim2.new(1, -42, 0.5, -8)
             box.BackgroundColor3 = Theme.Bg
             box.BorderSizePixel = 0
             box.Parent = row
@@ -583,7 +719,7 @@ function Kami:CreateWindow(cfg)
             return obj
         end
 
-        -- BUTTON (Refined Luxury Look)
+        -- BUTTON
         function Tab:AddButton(c)
             local cb = c.Callback or function() end
             local row = CreateRow(42)
@@ -742,7 +878,7 @@ function Kami:CreateWindow(cfg)
             dChevron.Position = UDim2.new(1, -14, 0.5, -5)
             dChevron.BackgroundTransparency = 1
             dChevron.Image = Lucide.chevron
-            dChevron.ImageColor3 = Theme.TextDark
+            dChevron.ImageColor3 = Theme.TextMuted
             dChevron.Parent = dropBtn
 
             local function OpenMenu()
@@ -838,7 +974,7 @@ function Kami:CreateWindow(cfg)
 
     function Window:BuildConfigSection(settingsTab)
         if not settingsTab then return end
-        settingsTab:AddSection({ Title = "System" })
+        settingsTab:AddSection({ Title = "System Information" })
         settingsTab:AddParagraph({
             Title = "Kami Framework",
             Content = "Refined sharp luxury interface with zero-corner aesthetics.",
