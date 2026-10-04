@@ -1,14 +1,16 @@
 --[[
-    KAMI UI - v1.1.0
-    Pitch Dark Edition  ·  Minimal · Elegant · Animated
+    KAMI UI - v1.2.0
+    Pitch Dark Edition  ·  Minimal · Sharp · Animated
 
     Features:
       - Pitch Dark default theme (+ Obsidian Gold, Cyber Gold, Midnight Gold, Graphite)
+      - Sharp rect aesthetic (no UICorner)
       - Smooth animations: window open/close, collapse, tab slide, ripples,
         toggle/slider/dropdown motion, sliding notifications w/ timer bar
       - Custom tab icons via rbxassetid / number / built-in name
       - Profile card, stat grid (live telemetry), section, paragraph, label
-      - Toggle, Button, Slider, Dropdown, Input, Keybind
+      - Toggle, Button, Slider, Dropdown (multi + search), ColorPicker, Input, Keybind
+      - Window:Destroy() + adaptive mobile window sizing
       - Post-loading Discord invite prompt
       - Live theme switching + Config manager (save / load / delete / auto-load)
       - Floating toggle button on touch devices
@@ -21,7 +23,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.1.0"
+    Version = "1.2.0"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -170,8 +172,48 @@ local function Tween(obj, t, props, style, dir)
     return tw
 end
 
-local function Corner(parent, r)
-    return New("UICorner", { CornerRadius = UDim.new(0, r or 4), Parent = parent })
+-- Sharp aesthetic: UICorner intentionally disabled
+local function Corner(_parent, _r)
+    return nil
+end
+
+local function ColorToHex(c)
+    return string.format("%02X%02X%02X",
+        math.floor(c.R * 255 + 0.5),
+        math.floor(c.G * 255 + 0.5),
+        math.floor(c.B * 255 + 0.5)
+    )
+end
+
+local function HexToColor(hex)
+    hex = tostring(hex or ""):gsub("#", "")
+    if #hex ~= 6 then return nil end
+    local r = tonumber(hex:sub(1, 2), 16)
+    local g = tonumber(hex:sub(3, 4), 16)
+    local b = tonumber(hex:sub(5, 6), 16)
+    if not (r and g and b) then return nil end
+    return Color3.fromRGB(r, g, b)
+end
+
+local function FitWindowSize(size)
+    size = size or UDim2.fromOffset(620, 430)
+    local cam = workspace.CurrentCamera
+    local vs = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
+    local padX, padY = 24, 48
+    local w = size.X.Offset + (vs.X * size.X.Scale)
+    local h = size.Y.Offset + (vs.Y * size.Y.Scale)
+    local compact = UserInputService.TouchEnabled or vs.X < 720
+    w = math.min(w, vs.X - padX)
+    h = math.min(h, vs.Y - padY)
+    if compact then
+        w = math.min(w, math.max(320, vs.X - padX))
+        h = math.min(h, math.max(280, vs.Y - padY))
+        if vs.X < 520 then
+            w = vs.X - padX
+            h = math.min(vs.Y - padY, math.max(300, h))
+        end
+    end
+    return UDim2.fromOffset(math.floor(w), math.floor(h)), compact
 end
 
 local function Stroke(parent, color, thick, transp)
@@ -192,7 +234,7 @@ local function Pad(parent, t, b, l, r)
     })
 end
 
--- Soft ripple from the center of a (clipping) button
+-- Sharp flash ripple (no round corners)
 local function Ripple(btn)
     local size = math.max(btn.AbsoluteSize.X, btn.AbsoluteSize.Y) * 1.6
     local r = New("Frame", {
@@ -205,7 +247,6 @@ local function Ripple(btn)
         ZIndex = btn.ZIndex + 1,
         Parent = btn,
     })
-    Corner(r, 999)
     Tween(r, 0.55, { Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1 })
     task.delay(0.56, function() r:Destroy() end)
 end
@@ -479,6 +520,27 @@ local GlobalDropdown = New("Frame", {
 Corner(GlobalDropdown, 5)
 local DropStroke = Stroke(GlobalDropdown, CurrentTheme.BorderHover)
 
+local DropSearch = New("TextBox", {
+    Name = "DropSearch",
+    Size = UDim2.new(1, -8, 0, 24),
+    Position = UDim2.fromOffset(4, 4),
+    BackgroundColor3 = CurrentTheme.Bg,
+    BorderSizePixel = 0,
+    Text = "",
+    PlaceholderText = "Search...",
+    Font = Enum.Font.Gotham,
+    TextSize = 10,
+    TextColor3 = CurrentTheme.Text,
+    PlaceholderColor3 = CurrentTheme.TextDull,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ClearTextOnFocus = false,
+    Visible = false,
+    ZIndex = 101,
+    Parent = GlobalDropdown,
+})
+Pad(DropSearch, 0, 0, 8, 8)
+local DropSearchStroke = Stroke(DropSearch, CurrentTheme.Border)
+
 local DropScroll = New("ScrollingFrame", {
     Size = UDim2.fromScale(1, 1),
     BackgroundTransparency = 1,
@@ -487,6 +549,7 @@ local DropScroll = New("ScrollingFrame", {
     ScrollBarImageColor3 = CurrentTheme.BorderHover,
     AutomaticCanvasSize = Enum.AutomaticSize.Y,
     CanvasSize = UDim2.new(0, 0, 0, 0),
+    ZIndex = 101,
     Parent = GlobalDropdown,
 })
 New("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = DropScroll })
@@ -496,6 +559,10 @@ RegisterPaint(function()
     GlobalDropdown.BackgroundColor3 = CurrentTheme.Card
     DropStroke.Color = CurrentTheme.BorderHover
     DropScroll.ScrollBarImageColor3 = CurrentTheme.BorderHover
+    DropSearch.BackgroundColor3 = CurrentTheme.Bg
+    DropSearch.TextColor3 = CurrentTheme.Text
+    DropSearch.PlaceholderColor3 = CurrentTheme.TextDull
+    DropSearchStroke.Color = CurrentTheme.Border
 end)
 
 local CurrentDropdown = nil   -- handle table { Button, Hovered, OnClose }
@@ -508,6 +575,8 @@ local function CloseDropdown()
     local owner = CurrentDropdown
     CurrentDropdown = nil
     OverDropdown = false
+    DropSearch.Text = ""
+    DropSearch.Visible = false
     if owner.OnClose then pcall(owner.OnClose) end
     Tween(GlobalDropdown, 0.18, { Size = UDim2.fromOffset(GlobalDropdown.Size.X.Offset, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
     task.delay(0.19, function()
@@ -520,6 +589,53 @@ UserInputService.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         if not OverDropdown and not CurrentDropdown.Hovered then
             CloseDropdown()
+        end
+    end
+end)
+
+-- Global color picker overlay
+local GlobalColorPicker = New("Frame", {
+    Size = UDim2.fromOffset(220, 0),
+    BackgroundColor3 = CurrentTheme.Card,
+    BorderSizePixel = 0,
+    ZIndex = 110,
+    Visible = false,
+    ClipsDescendants = true,
+    Parent = Screen,
+})
+local ColorPickerStroke = Stroke(GlobalColorPicker, CurrentTheme.BorderHover)
+local CurrentColorPicker = nil
+local OverColorPicker = false
+GlobalColorPicker.MouseEnter:Connect(function() OverColorPicker = true end)
+GlobalColorPicker.MouseLeave:Connect(function() OverColorPicker = false end)
+
+RegisterPaint(function()
+    GlobalColorPicker.BackgroundColor3 = CurrentTheme.Card
+    ColorPickerStroke.Color = CurrentTheme.BorderHover
+end)
+
+local function CloseColorPicker()
+    if not CurrentColorPicker then return end
+    local owner = CurrentColorPicker
+    CurrentColorPicker = nil
+    OverColorPicker = false
+    if owner.OnClose then pcall(owner.OnClose) end
+    Tween(GlobalColorPicker, 0.18, { Size = UDim2.fromOffset(GlobalColorPicker.Size.X.Offset, 0) }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    task.delay(0.19, function()
+        if not CurrentColorPicker then
+            GlobalColorPicker.Visible = false
+            for _, ch in ipairs(GlobalColorPicker:GetChildren()) do
+                if not ch:IsA("UIStroke") then ch:Destroy() end
+            end
+        end
+    end)
+end
+
+UserInputService.InputBegan:Connect(function(input)
+    if not CurrentColorPicker then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if not OverColorPicker and not CurrentColorPicker.Hovered then
+            CloseColorPicker()
         end
     end
 end)
@@ -728,8 +844,16 @@ function Kami:CreateWindow(cfg)
     cfg = cfg or {}
     local winName = cfg.Name or "KAMI"
     local winSub = cfg.SubTitle or "menu"
-    local winSize = cfg.Size or UDim2.fromOffset(620, 430)
+    local winSize, isCompact = FitWindowSize(cfg.Size or UDim2.fromOffset(620, 430))
     local minKey = cfg.MinimizeKey or Enum.KeyCode.RightControl
+    local destroyed = false
+    local connections = {}
+
+    local function Bind(signal, fn)
+        local conn = signal:Connect(fn)
+        table.insert(connections, conn)
+        return conn
+    end
 
     if cfg.Theme and Themes[cfg.Theme] then ApplyTheme(cfg.Theme) end
 
@@ -746,6 +870,7 @@ function Kami:CreateWindow(cfg)
         AutoLoad = false,
         Visible = true,
         _Silent = false,
+        Compact = isCompact,
     }
 
     -- Read auto-load state
@@ -929,10 +1054,12 @@ function Kami:CreateWindow(cfg)
     local MobileBtn -- forward
 
     function Window:SetVisible(v)
+        if destroyed then return end
         v = v and true or false
         if v == Window.Visible then return end
         Window.Visible = v
         CloseDropdown()
+        CloseColorPicker()
         if v then
             Holder.Visible = true
             Veil.Visible = true
@@ -957,6 +1084,7 @@ function Kami:CreateWindow(cfg)
     function Window:SetCollapsed(state)
         collapsed = state and true or false
         CloseDropdown()
+        CloseColorPicker()
         local target = collapsed and UDim2.new(winSize.X.Scale, winSize.X.Offset, 0, 38) or winSize
         Tween(Holder, 0.45, { Size = target })
         MinBtn.Text = collapsed and "+" or "—"
@@ -977,8 +1105,8 @@ function Kami:CreateWindow(cfg)
         })
     end)
 
-    UserInputService.InputBegan:Connect(function(inp, proc)
-        if proc or BindingActive then return end
+    Bind(UserInputService.InputBegan, function(inp, proc)
+        if destroyed or proc or BindingActive then return end
         if inp.KeyCode == Window.ToggleKey then Window:Toggle() end
     end)
 
@@ -1017,7 +1145,7 @@ function Kami:CreateWindow(cfg)
     end
 
     --================ SIDEBAR ================
-    local SIDEBAR_W = 150
+    local SIDEBAR_W = isCompact and 110 or 150
 
     local Sidebar = New("Frame", {
         Size = UDim2.new(0, SIDEBAR_W, 1, -38),
@@ -1177,15 +1305,21 @@ function Kami:CreateWindow(cfg)
     local function Encode(v)
         if typeof(v) == "EnumItem" then
             return { __enum = tostring(v.EnumType), name = v.Name }
+        elseif typeof(v) == "Color3" then
+            return { __color = true, r = v.R, g = v.G, b = v.B }
         end
         return v
     end
 
     local function Decode(v)
-        if type(v) == "table" and v.__enum and v.name then
-            local ok, item = pcall(function() return Enum[v.__enum][v.name] end)
-            if ok then return item end
-            return nil
+        if type(v) == "table" then
+            if v.__enum and v.name then
+                local ok, item = pcall(function() return Enum[v.__enum][v.name] end)
+                if ok then return item end
+                return nil
+            elseif v.__color then
+                return Color3.new(v.r or 0, v.g or 0, v.b or 0)
+            end
         end
         return v
     end
@@ -2132,14 +2266,28 @@ function Kami:CreateWindow(cfg)
         end
 
         ------------------------------------------------------------
-        -- Dropdown
+        -- Dropdown (single / multi + optional search)
         ------------------------------------------------------------
         function Tab:AddDropdown(c)
             c = c or {}
             local values = c.Values or {}
-            local current = c.Default or values[1] or "Select..."
+            local multi = c.Multi == true
+            local searchable = c.Searchable == true or (#values >= 8)
             local cb = c.Callback or function() end
             local flag = c.Flag
+
+            local current
+            if multi then
+                current = {}
+                if type(c.Default) == "table" then
+                    for _, v in ipairs(c.Default) do table.insert(current, v) end
+                elseif c.Default ~= nil then
+                    table.insert(current, c.Default)
+                end
+            else
+                current = c.Default or values[1] or "Select..."
+            end
+
             local row = CreateRow(44)
             AddHeaderLabels(row, c.Title, c.Description, 170)
 
@@ -2156,11 +2304,20 @@ function Kami:CreateWindow(cfg)
             Corner(dropBtn, 4)
             local dStroke = Stroke(dropBtn, CurrentTheme.Border)
 
+            local function FormatLabel()
+                if multi then
+                    if #current == 0 then return "None" end
+                    if #current == 1 then return tostring(current[1]) end
+                    return tostring(#current) .. " selected"
+                end
+                return tostring(current)
+            end
+
             local dText = New("TextLabel", {
                 Position = UDim2.fromOffset(10, 0),
                 Size = UDim2.new(1, -30, 1, 0),
                 BackgroundTransparency = 1,
-                Text = tostring(current),
+                Text = FormatLabel(),
                 Font = Enum.Font.Gotham,
                 TextSize = 10,
                 TextColor3 = CurrentTheme.Text,
@@ -2204,32 +2361,63 @@ function Kami:CreateWindow(cfg)
                 dChevron.ImageColor3 = isOpen and CurrentTheme.Accent or CurrentTheme.TextMuted
             end)
 
-            local obj = { Value = current }
-
-            local function Select(val, silent)
-                current = val
-                obj.Value = val
-                dText.Text = tostring(val)
-                if not silent then task.spawn(cb, val) end
+            local function CloneList(t)
+                local n = {}
+                for i, v in ipairs(t) do n[i] = v end
+                return n
             end
 
-            local function OpenMenu()
-                if CurrentDropdown == handle then
-                    CloseDropdown()
-                    return
-                end
-                if CurrentDropdown then CloseDropdown() end
-                CurrentDropdown = handle
-                isOpen = true
+            local obj = { Value = multi and CloneList(current) or current }
 
+            local function IsSelected(val)
+                if multi then
+                    return table.find(current, val) ~= nil
+                end
+                return val == current
+            end
+
+            local function Emit(silent)
+                if multi then
+                    obj.Value = CloneList(current)
+                else
+                    obj.Value = current
+                end
+                dText.Text = FormatLabel()
+                if not silent then task.spawn(cb, obj.Value) end
+            end
+
+            local function Select(val, silent)
+                if multi then
+                    local idx = table.find(current, val)
+                    if idx then
+                        table.remove(current, idx)
+                    else
+                        table.insert(current, val)
+                    end
+                else
+                    current = val
+                end
+                Emit(silent)
+            end
+
+            local function ClearItems()
                 for _, ch in ipairs(DropScroll:GetChildren()) do
-                    if ch:IsA("TextButton") then ch:Destroy() end
+                    if ch:IsA("TextButton") or ch:IsA("TextLabel") then ch:Destroy() end
                 end
-                DropScroll.CanvasPosition = Vector2.new(0, 0)
+            end
 
+            local function BuildItems(filter)
+                ClearItems()
+                DropScroll.CanvasPosition = Vector2.new(0, 0)
                 local T = CurrentTheme
+                local q = tostring(filter or ""):lower()
+                local shown = 0
+
                 for i, val in ipairs(values) do
-                    local selected = (val == current)
+                    local label = tostring(val)
+                    if q == "" or label:lower():find(q, 1, true) then
+                    shown = shown + 1
+                    local selected = IsSelected(val)
                     local item = New("TextButton", {
                         Size = UDim2.new(1, 0, 0, 24),
                         BackgroundColor3 = T.CardHover,
@@ -2237,16 +2425,53 @@ function Kami:CreateWindow(cfg)
                         BorderSizePixel = 0,
                         Text = "",
                         AutoButtonColor = false,
-                        LayoutOrder = i,
+                        LayoutOrder = shown,
                         ZIndex = 101,
                         Parent = DropScroll,
                     })
                     Corner(item, 3)
+
+                    local leftPad = (multi or selected) and 22 or 8
+                    if multi then
+                        local box = New("Frame", {
+                            AnchorPoint = Vector2.new(0, 0.5),
+                            Position = UDim2.new(0, 6, 0.5, 0),
+                            Size = UDim2.fromOffset(10, 10),
+                            BackgroundColor3 = selected and T.Accent or T.Bg,
+                            BorderSizePixel = 0,
+                            ZIndex = 102,
+                            Parent = item,
+                        })
+                        Stroke(box, selected and T.Accent or T.BorderHover)
+                        if selected then
+                            New("TextLabel", {
+                                Size = UDim2.fromScale(1, 1),
+                                BackgroundTransparency = 1,
+                                Text = "✓",
+                                Font = Enum.Font.GothamBold,
+                                TextSize = 8,
+                                TextColor3 = T.Bg,
+                                ZIndex = 103,
+                                Parent = box,
+                            })
+                        end
+                    elseif selected then
+                        New("Frame", {
+                            AnchorPoint = Vector2.new(0, 0.5),
+                            Position = UDim2.new(0, 7, 0.5, 0),
+                            Size = UDim2.fromOffset(4, 4),
+                            BackgroundColor3 = T.Accent,
+                            BorderSizePixel = 0,
+                            ZIndex = 102,
+                            Parent = item,
+                        })
+                    end
+
                     local itemLbl = New("TextLabel", {
-                        Position = UDim2.fromOffset(selected and 16 or 8, 0),
-                        Size = UDim2.new(1, -20, 1, 0),
+                        Position = UDim2.fromOffset(leftPad, 0),
+                        Size = UDim2.new(1, -leftPad - 6, 1, 0),
                         BackgroundTransparency = 1,
-                        Text = tostring(val),
+                        Text = label,
                         Font = selected and Enum.Font.GothamMedium or Enum.Font.Gotham,
                         TextSize = 10,
                         TextColor3 = selected and T.Text or T.TextMuted,
@@ -2256,21 +2481,9 @@ function Kami:CreateWindow(cfg)
                         ZIndex = 102,
                         Parent = item,
                     })
-                    if selected then
-                        local dot = New("Frame", {
-                            AnchorPoint = Vector2.new(0, 0.5),
-                            Position = UDim2.new(0, 7, 0.5, 0),
-                            Size = UDim2.fromOffset(4, 4),
-                            BackgroundColor3 = T.Accent,
-                            BorderSizePixel = 0,
-                            ZIndex = 102,
-                            Parent = item,
-                        })
-                        Corner(dot, 999)
-                    end
 
-                    task.delay((i - 1) * 0.018, function()
-                        if itemLbl.Parent then Tween(itemLbl, 0.2, { TextTransparency = 0 }) end
+                    task.delay((shown - 1) * 0.012, function()
+                        if itemLbl.Parent then Tween(itemLbl, 0.18, { TextTransparency = 0 }) end
                     end)
 
                     item.MouseEnter:Connect(function()
@@ -2278,19 +2491,63 @@ function Kami:CreateWindow(cfg)
                         Tween(itemLbl, 0.12, { TextColor3 = CurrentTheme.Text })
                     end)
                     item.MouseLeave:Connect(function()
-                        if val ~= current then
+                        if not IsSelected(val) then
                             Tween(item, 0.12, { BackgroundTransparency = 1 })
                             Tween(itemLbl, 0.12, { TextColor3 = CurrentTheme.TextMuted })
                         end
                     end)
                     item.MouseButton1Click:Connect(function()
                         Select(val)
-                        CloseDropdown()
+                        if multi then
+                            BuildItems(DropSearch.Text)
+                        else
+                            CloseDropdown()
+                        end
                     end)
+                    end
                 end
 
-                local w = dropBtn.AbsoluteSize.X
-                local h = math.min(#values * 26, 26 * 6) + 8
+                if shown == 0 then
+                    New("TextLabel", {
+                        Size = UDim2.new(1, 0, 0, 24),
+                        BackgroundTransparency = 1,
+                        Text = "No results",
+                        Font = Enum.Font.Gotham,
+                        TextSize = 10,
+                        TextColor3 = CurrentTheme.TextDull,
+                        ZIndex = 102,
+                        Parent = DropScroll,
+                    })
+                end
+
+                return shown
+            end
+
+            local function OpenMenu()
+                if CurrentDropdown == handle then
+                    CloseDropdown()
+                    return
+                end
+                CloseColorPicker()
+                if CurrentDropdown then CloseDropdown() end
+                CurrentDropdown = handle
+                isOpen = true
+
+                local searchH = searchable and 32 or 0
+                DropSearch.Visible = searchable
+                DropSearch.Text = ""
+                if searchable then
+                    DropScroll.Position = UDim2.fromOffset(0, searchH)
+                    DropScroll.Size = UDim2.new(1, 0, 1, -searchH)
+                else
+                    DropScroll.Position = UDim2.fromOffset(0, 0)
+                    DropScroll.Size = UDim2.fromScale(1, 1)
+                end
+
+                local shown = BuildItems("")
+                local listH = math.min(math.max(shown, 1) * 26, 26 * 6) + 8
+                local h = listH + searchH
+                local w = math.max(dropBtn.AbsoluteSize.X, searchable and 160 or 136)
                 local x = dropBtn.AbsolutePosition.X
                 local y = dropBtn.AbsolutePosition.Y + dropBtn.AbsoluteSize.Y + 4
                 if y + h > Screen.AbsoluteSize.Y - 8 then
@@ -2303,19 +2560,282 @@ function Kami:CreateWindow(cfg)
                 Tween(GlobalDropdown, 0.32, { Size = UDim2.fromOffset(w, h) })
                 Tween(dChevron, 0.3, { Rotation = 180, ImageColor3 = CurrentTheme.Accent })
                 Tween(dStroke, 0.2, { Color = CurrentTheme.Accent })
+
+                if searchable then
+                    task.defer(function() DropSearch:CaptureFocus() end)
+                end
             end
+
+            DropSearch:GetPropertyChangedSignal("Text"):Connect(function()
+                if CurrentDropdown == handle and DropSearch.Visible then
+                    BuildItems(DropSearch.Text)
+                end
+            end)
 
             dropBtn.MouseButton1Click:Connect(OpenMenu)
 
-            function obj:Set(v) Select(v) end
+            function obj:Set(v)
+                if multi then
+                    current = {}
+                    if type(v) == "table" then
+                        for _, item in ipairs(v) do table.insert(current, item) end
+                    elseif v ~= nil then
+                        table.insert(current, v)
+                    end
+                else
+                    current = v
+                end
+                Emit(false)
+                if CurrentDropdown == handle then BuildItems(DropSearch.Text) end
+            end
+
             function obj:SetValues(newVals)
                 values = newVals or {}
-                if not table.find(values, current) then
-                    current = values[1] or "Select..."
-                    obj.Value = current
+                if multi then
+                    local kept = {}
+                    for _, v in ipairs(current) do
+                        if table.find(values, v) then table.insert(kept, v) end
+                    end
+                    current = kept
+                else
+                    if not table.find(values, current) then
+                        current = values[1] or "Select..."
+                    end
                 end
-                dText.Text = tostring(current)
+                Emit(true)
                 if CurrentDropdown == handle then CloseDropdown() end
+            end
+
+            if flag then Window.Flags[flag] = obj end
+            return obj
+        end
+
+        ------------------------------------------------------------
+        -- ColorPicker
+        ------------------------------------------------------------
+        function Tab:AddColorPicker(c)
+            c = c or {}
+            local color = c.Default or Color3.fromRGB(236, 236, 236)
+            if type(color) == "string" then color = HexToColor(color) or Color3.fromRGB(236, 236, 236) end
+            local cb = c.Callback or function() end
+            local flag = c.Flag
+            local row = CreateRow(44)
+            AddHeaderLabels(row, c.Title, c.Description, 150)
+
+            local hexLbl = New("TextLabel", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -44, 0.5, 0),
+                Size = UDim2.fromOffset(58, 18),
+                BackgroundTransparency = 1,
+                Text = "#" .. ColorToHex(color),
+                Font = Enum.Font.GothamMedium,
+                TextSize = 10,
+                TextColor3 = CurrentTheme.TextMuted,
+                TextXAlignment = Enum.TextXAlignment.Right,
+                Parent = row,
+            })
+
+            local swatch = New("TextButton", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -14, 0.5, 0),
+                Size = UDim2.fromOffset(22, 22),
+                BackgroundColor3 = color,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                Parent = row,
+            })
+            local sStroke = Stroke(swatch, CurrentTheme.BorderHover)
+
+            local handle = { Button = swatch, Hovered = false }
+            local isOpen = false
+            local h, s, v = Color3.toHSV(color)
+
+            handle.OnClose = function()
+                isOpen = false
+                Tween(sStroke, 0.2, { Color = handle.Hovered and CurrentTheme.BorderHover or CurrentTheme.Border })
+            end
+
+            swatch.MouseEnter:Connect(function()
+                handle.Hovered = true
+                if not isOpen then Tween(sStroke, 0.15, { Color = CurrentTheme.AccentMuted }) end
+            end)
+            swatch.MouseLeave:Connect(function()
+                handle.Hovered = false
+                if not isOpen then Tween(sStroke, 0.15, { Color = CurrentTheme.BorderHover }) end
+            end)
+
+            local obj = { Value = color }
+
+            local function ApplyColor(newColor, silent)
+                color = newColor
+                h, s, v = Color3.toHSV(color)
+                obj.Value = color
+                swatch.BackgroundColor3 = color
+                hexLbl.Text = "#" .. ColorToHex(color)
+                if not silent then task.spawn(cb, color) end
+            end
+
+            local function OpenPicker()
+                if CurrentColorPicker == handle then
+                    CloseColorPicker()
+                    return
+                end
+                CloseDropdown()
+                if CurrentColorPicker then CloseColorPicker() end
+                CurrentColorPicker = handle
+                isOpen = true
+
+                for _, ch in ipairs(GlobalColorPicker:GetChildren()) do
+                    if not ch:IsA("UIStroke") then ch:Destroy() end
+                end
+
+                local T = CurrentTheme
+                local body = New("Frame", {
+                    Size = UDim2.fromScale(1, 1),
+                    BackgroundTransparency = 1,
+                    Parent = GlobalColorPicker,
+                })
+                Pad(body, 10, 10, 10, 10)
+
+                local preview = New("Frame", {
+                    Size = UDim2.new(1, 0, 0, 28),
+                    BackgroundColor3 = color,
+                    BorderSizePixel = 0,
+                    Parent = body,
+                })
+                Stroke(preview, T.Border)
+
+                local hexBox = New("TextBox", {
+                    Position = UDim2.fromOffset(0, 36),
+                    Size = UDim2.new(1, 0, 0, 24),
+                    BackgroundColor3 = T.Bg,
+                    BorderSizePixel = 0,
+                    Text = ColorToHex(color),
+                    PlaceholderText = "HEX",
+                    Font = Enum.Font.GothamMedium,
+                    TextSize = 11,
+                    TextColor3 = T.Text,
+                    PlaceholderColor3 = T.TextDull,
+                    ClearTextOnFocus = false,
+                    Parent = body,
+                })
+                Pad(hexBox, 0, 0, 8, 8)
+                Stroke(hexBox, T.Border)
+
+                local function MakeChannel(y, label, getVal, setVal)
+                    local title = New("TextLabel", {
+                        Position = UDim2.fromOffset(0, y),
+                        Size = UDim2.new(1, 0, 0, 12),
+                        BackgroundTransparency = 1,
+                        Text = label,
+                        Font = Enum.Font.GothamMedium,
+                        TextSize = 9,
+                        TextColor3 = T.TextDull,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = body,
+                    })
+                    local track = New("Frame", {
+                        Position = UDim2.fromOffset(0, y + 14),
+                        Size = UDim2.new(1, 0, 0, 4),
+                        BackgroundColor3 = T.Border,
+                        BorderSizePixel = 0,
+                        Parent = body,
+                    })
+                    local fill = New("Frame", {
+                        Size = UDim2.new(getVal(), 0, 1, 0),
+                        BackgroundColor3 = T.Accent,
+                        BorderSizePixel = 0,
+                        Parent = track,
+                    })
+                    local knob = New("Frame", {
+                        AnchorPoint = Vector2.new(0.5, 0.5),
+                        Position = UDim2.new(getVal(), 0, 0.5, 0),
+                        Size = UDim2.fromOffset(10, 10),
+                        BackgroundColor3 = T.Accent,
+                        BorderSizePixel = 0,
+                        ZIndex = 2,
+                        Parent = track,
+                    })
+                    local hit = New("TextButton", {
+                        Position = UDim2.fromOffset(0, y + 8),
+                        Size = UDim2.new(1, 0, 0, 16),
+                        BackgroundTransparency = 1,
+                        Text = "",
+                        ZIndex = 3,
+                        Parent = body,
+                    })
+                    local dragging = false
+                    local function Update(x)
+                        local r = math.clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+                        setVal(r)
+                        fill.Size = UDim2.new(r, 0, 1, 0)
+                        knob.Position = UDim2.new(r, 0, 0.5, 0)
+                        local nc = Color3.fromHSV(h, s, v)
+                        preview.BackgroundColor3 = nc
+                        hexBox.Text = ColorToHex(nc)
+                        ApplyColor(nc, false)
+                    end
+                    hit.InputBegan:Connect(function(inp)
+                        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+                            dragging = true
+                            Update(inp.Position.X)
+                        end
+                    end)
+                    Bind(UserInputService.InputEnded, function(inp)
+                        if dragging and (inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch) then
+                            dragging = false
+                        end
+                    end)
+                    Bind(UserInputService.InputChanged, function(inp)
+                        if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+                            Update(inp.Position.X)
+                        end
+                    end)
+                    return title
+                end
+
+                MakeChannel(68, "HUE", function() return h end, function(r) h = r end)
+                MakeChannel(100, "SAT", function() return s end, function(r) s = r end)
+                MakeChannel(132, "VAL", function() return v end, function(r) v = r end)
+
+                hexBox.FocusLost:Connect(function()
+                    local parsed = HexToColor(hexBox.Text)
+                    if parsed then
+                        ApplyColor(parsed, false)
+                        preview.BackgroundColor3 = parsed
+                        hexBox.Text = ColorToHex(parsed)
+                    else
+                        hexBox.Text = ColorToHex(color)
+                    end
+                end)
+
+                local w, hPanel = 220, 178
+                local x = swatch.AbsolutePosition.X + swatch.AbsoluteSize.X - w
+                local y = swatch.AbsolutePosition.Y + swatch.AbsoluteSize.Y + 4
+                if x < 8 then x = 8 end
+                if y + hPanel > Screen.AbsoluteSize.Y - 8 then
+                    y = swatch.AbsolutePosition.Y - hPanel - 4
+                end
+
+                GlobalColorPicker.Position = UDim2.fromOffset(x, y)
+                GlobalColorPicker.Size = UDim2.fromOffset(w, 0)
+                GlobalColorPicker.Visible = true
+                Tween(GlobalColorPicker, 0.28, { Size = UDim2.fromOffset(w, hPanel) })
+                Tween(sStroke, 0.2, { Color = CurrentTheme.Accent })
+            end
+
+            swatch.MouseButton1Click:Connect(OpenPicker)
+
+            RegisterPaint(function()
+                hexLbl.TextColor3 = CurrentTheme.TextMuted
+                sStroke.Color = isOpen and CurrentTheme.Accent or CurrentTheme.BorderHover
+            end)
+
+            function obj:Set(v)
+                if type(v) == "string" then v = HexToColor(v) end
+                if typeof(v) ~= "Color3" then return end
+                ApplyColor(v, false)
             end
 
             if flag then Window.Flags[flag] = obj end
@@ -2646,6 +3166,7 @@ function Kami:CreateWindow(cfg)
     --================ AUTO LOAD ================
     -- Delayed so the user script can finish creating every flagged element first.
     task.delay(1, function()
+        if destroyed then return end
         if Window.AutoLoad then
             local ok = Window:LoadConfig(Window.ActiveConfig)
             if ok then
@@ -2654,7 +3175,39 @@ function Kami:CreateWindow(cfg)
         end
     end)
 
+    function Window:Destroy()
+        if destroyed then return end
+        destroyed = true
+        CloseDropdown()
+        CloseColorPicker()
+        for i = #connections, 1, -1 do
+            pcall(function() connections[i]:Disconnect() end)
+            connections[i] = nil
+        end
+        pcall(function()
+            if MobileBtn then MobileBtn:Destroy() end
+        end)
+        pcall(function()
+            if Screen then Screen:Destroy() end
+        end)
+        if getgenv and getgenv().KamiUIInstance then
+            getgenv().KamiUIInstance = nil
+        end
+        Window.Visible = false
+        Window.Tabs = {}
+        Window.Flags = {}
+    end
+
     return Window
+end
+
+function Kami:Destroy()
+    pcall(function()
+        if Screen then Screen:Destroy() end
+    end)
+    if getgenv and getgenv().KamiUIInstance then
+        getgenv().KamiUIInstance = nil
+    end
 end
 
 return Kami
