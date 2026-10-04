@@ -1,6 +1,11 @@
 --[[
-    KAMI UI - v1.4.3
+    KAMI UI - v1.4.4
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.4.4 changes:
+      - Loading screen: the logo mark can now be an image via cfg.Logo (with a
+        graceful fallback to the big "K"); configurable size via cfg.LogoSize
+      - Loader passes the KAMI icon URL for the loading mark
 
     v1.4.3 changes:
       - Row accent: replaced the short floating tick with a full-height left
@@ -66,7 +71,7 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.3"
+    Version = "1.4.4"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
@@ -445,7 +450,7 @@ function Kami:ShowLoadingScreen(cfg)
     local Center = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(300, 190),
+        Size = UDim2.fromOffset(320, 232),
         BackgroundTransparency = 1,
         Parent = Bg,
     })
@@ -455,23 +460,47 @@ function Kami:ShowLoadingScreen(cfg)
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
         VerticalAlignment = Enum.VerticalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 12),
+        Padding = UDim.new(0, 10),
         Parent = Center,
     })
 
-    -- big display "K" logo mark
-    local Mark = New("TextLabel", {
-        Size = UDim2.fromOffset(300, 62),
-        BackgroundTransparency = 1,
-        Text = "K",
-        Font = Enum.Font.GothamBlack,
-        TextSize = 56,
-        TextColor3 = T.Text,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        LayoutOrder = 1,
-        Parent = Center,
-    })
-    local MarkStroke = Stroke(Mark, T.Accent, 1.5)
+    -- logo mark: use cfg.Logo (image URL) when given, otherwise a big "K"
+    local logoURL = cfg.Logo
+    local Mark, MarkStroke, MarkIsImage
+    if logoURL and logoURL ~= "" then
+        local size = tonumber(cfg.LogoSize) or 88
+        Mark = New("ImageLabel", {
+            Size = UDim2.fromOffset(size, size),
+            BackgroundTransparency = 1,
+            Image = logoURL,
+            ImageTransparency = 1,
+            LayoutOrder = 1,
+            Parent = Center,
+        })
+        MarkIsImage = true
+    else
+        Mark = New("TextLabel", {
+            Size = UDim2.fromOffset(300, 62),
+            BackgroundTransparency = 1,
+            Text = "K",
+            Font = Enum.Font.GothamBlack,
+            TextSize = 56,
+            TextColor3 = T.Text,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            LayoutOrder = 1,
+            Parent = Center,
+        })
+        MarkStroke = Stroke(Mark, T.Accent, 1.5)
+        MarkIsImage = false
+    end
+
+    local function MarkFade(t, v)
+        if MarkIsImage then
+            Tween(Mark, t, { ImageTransparency = v })
+        else
+            Tween(Mark, t, { TextTransparency = v })
+        end
+    end
 
     -- spaced wordmark
     local Word = New("TextLabel", {
@@ -558,15 +587,14 @@ function Kami:ShowLoadingScreen(cfg)
         Parent = Bg,
     })
 
-    -- entrance: the K pops in
+    -- entrance: the mark pops in
     CenterScale.Scale = 0.9
-    Mark.TextTransparency = 1
-    MarkStroke.Transparency = 1
+    if MarkIsImage then Mark.ImageTransparency = 1 else Mark.TextTransparency = 1 end
     Word.TextTransparency = 1
     Status.TextTransparency = 1
     Tween(CenterScale, 0.7, { Scale = 1 }, Enum.EasingStyle.Back)
-    Tween(Mark, 0.5, { TextTransparency = 0 })
-    Tween(MarkStroke, 0.5, { Transparency = 0 })
+    MarkFade(0.5, 0)
+    if MarkStroke then Tween(MarkStroke, 0.5, { Transparency = 0 }) end
     Tween(Word, 0.5, { TextTransparency = 0 })
     Tween(Status, 0.4, { TextTransparency = 0 })
 
@@ -606,8 +634,8 @@ function Kami:ShowLoadingScreen(cfg)
             CenterScale.Scale = 1
             Tween(CenterScale, 0.45, { Scale = 1.12 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
             Tween(Bg, 0.5, { BackgroundTransparency = 1 })
-            Tween(Mark, 0.4, { TextTransparency = 1 })
-            Tween(MarkStroke, 0.4, { Transparency = 1 })
+            MarkFade(0.4, 1)
+            if MarkStroke then Tween(MarkStroke, 0.4, { Transparency = 1 }) end
             Tween(Word, 0.35, { TextTransparency = 1 })
             Tween(Status, 0.35, { TextTransparency = 1 })
             Tween(Percent, 0.35, { TextTransparency = 1 })
