@@ -1,7 +1,7 @@
 --[[
     KAMI UI - v1.0.0
     Luxury Dark & Gold Edition
-    Clean & Natural Language Interface
+    Clean, Modern & Sharp Minimalist Interface
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -52,14 +52,14 @@ Screen.Parent = GetParent()
 
 if getgenv then getgenv().KamiUIInstance = Screen end
 
--- Loading Screen Animasi "K"
+-- Loading Screen Animation
 function Kami:ShowLoadingScreen(cfg)
     cfg = cfg or {}
     local steps = cfg.Steps or {
-        "Memeriksa executor...",
-        "Mengambil profil akun...",
-        "Memuat tampilan menu...",
-        "Selesai."
+        "Checking client environment...",
+        "Fetching account profile...",
+        "Rendering luxury layout...",
+        "Ready."
     }
     local duration = cfg.Duration or 2.2
 
@@ -110,7 +110,7 @@ function Kami:ShowLoadingScreen(cfg)
     Status.Position = UDim2.new(0, 0, 0.65, 0)
     Status.Size = UDim2.new(1, 0, 0, 14)
     Status.BackgroundTransparency = 1
-    Status.Text = steps[1] or "Memuat..."
+    Status.Text = steps[1] or "Loading..."
     Status.Font = Enum.Font.Gotham
     Status.TextSize = 10
     Status.TextColor3 = Theme.GoldMuted
@@ -220,7 +220,7 @@ end)
 
 function Kami:Notify(cfg)
     cfg = cfg or {}
-    local nTitle = cfg.Title or "Pemberitahuan"
+    local nTitle = cfg.Title or "Notification"
     local nDesc = cfg.Content or ""
     local nDur = cfg.Duration or 3
 
@@ -443,7 +443,7 @@ function Kami:CreateWindow(cfg)
 
     function Window:AddTab(opt)
         opt = opt or {}
-        local tabTitle = opt.Title or "Menu"
+        local tabTitle = opt.Title or "Tab"
         local tabIcon = opt.Icon and Lucide[opt.Icon]
 
         local Tab = {}
@@ -576,7 +576,7 @@ function Kami:CreateWindow(cfg)
             end
         end
 
-        -- PROFILE CARD
+        -- Profile Card
         function Tab:AddProfileCard(c)
             c = c or {}
             local card = Instance.new("Frame")
@@ -629,7 +629,7 @@ function Kami:CreateWindow(cfg)
             statusSub.Position = UDim2.fromOffset(68, 42)
             statusSub.Size = UDim2.new(1, -180, 0, 14)
             statusSub.BackgroundTransparency = 1
-            statusSub.Text = c.Subtitle or "Akun Aktif"
+            statusSub.Text = c.Subtitle or "Active Client"
             statusSub.Font = Enum.Font.Gotham
             statusSub.TextSize = 9
             statusSub.TextColor3 = Theme.TextDull
@@ -658,7 +658,7 @@ function Kami:CreateWindow(cfg)
             badgeText.Parent = badge
         end
 
-        -- STAT GRID
+        -- Stat Grid
         function Tab:AddStatGrid(items)
             items = items or {}
             local gridH = math.ceil(#items / 2) * 44 + ((math.ceil(#items / 2) - 1) * 6)
@@ -708,7 +708,7 @@ function Kami:CreateWindow(cfg)
             end
         end
 
-        -- SECTION
+        -- Section
         function Tab:AddSection(c)
             local sHolder = Instance.new("Frame")
             sHolder.Size = UDim2.new(1, 0, 0, 20)
@@ -740,7 +740,7 @@ function Kami:CreateWindow(cfg)
             end)
         end
 
-        -- PARAGRAPH
+        -- Paragraph
         function Tab:AddParagraph(c)
             local pRow = Instance.new("Frame")
             pRow.Size = UDim2.new(1, 0, 0, 0)
@@ -789,7 +789,7 @@ function Kami:CreateWindow(cfg)
             end
         end
 
-        -- TOGGLE
+        -- Toggle
         function Tab:AddToggle(c)
             local state = c.Default or false
             local cb = c.Callback or function() end
@@ -836,7 +836,7 @@ function Kami:CreateWindow(cfg)
             return obj
         end
 
-        -- BUTTON
+        -- Button
         function Tab:AddButton(c)
             local cb = c.Callback or function() end
             local row = CreateRow(42)
@@ -847,7 +847,7 @@ function Kami:CreateWindow(cfg)
             bAction.Position = UDim2.new(1, -87, 0.5, -11)
             bAction.BackgroundColor3 = Theme.Bg
             bAction.BorderSizePixel = 0
-            bAction.Text = c.ButtonText or "Jalankan"
+            bAction.Text = c.ButtonText or "Execute"
             bAction.Font = Enum.Font.GothamMedium
             bAction.TextSize = 10
             bAction.TextColor3 = Theme.Gold
@@ -870,7 +870,7 @@ function Kami:CreateWindow(cfg)
             bAction.MouseButton1Click:Connect(cb)
         end
 
-        -- SLIDER
+        -- Slider
         function Tab:AddSlider(c)
             local min, max, step = c.Min or 0, c.Max or 100, c.Step or 1
             local cur = math.clamp(c.Default or min, min, max)
@@ -964,10 +964,10 @@ function Kami:CreateWindow(cfg)
             return obj
         end
 
-        -- DROPDOWN
+        -- Dropdown
         function Tab:AddDropdown(c)
             local values = c.Values or {}
-            local current = c.Default or values[1] or "Pilih..."
+            local current = c.Default or values[1] or "Select..."
             local cb = c.Callback or function() end
             local row = CreateRow(42)
             AddHeaderLabels(row, c.Title, c.Description)
@@ -1047,7 +1047,7 @@ function Kami:CreateWindow(cfg)
             return obj
         end
 
-        -- INPUT
+        -- Input
         function Tab:AddInput(c)
             local cb = c.Callback or function() end
             local row = CreateRow(42)
@@ -1059,7 +1059,7 @@ function Kami:CreateWindow(cfg)
             box.BackgroundColor3 = Theme.Bg
             box.BorderSizePixel = 0
             box.Text = c.Default or ""
-            box.PlaceholderText = c.Placeholder or "Ketik di sini..."
+            box.PlaceholderText = c.Placeholder or "Type here..."
             box.Font = Enum.Font.Gotham
             box.TextSize = 10
             box.TextColor3 = Theme.Text
@@ -1091,10 +1091,10 @@ function Kami:CreateWindow(cfg)
 
     function Window:BuildConfigSection(settingsTab)
         if not settingsTab then return end
-        settingsTab:AddSection({ Title = "Tentang Menu" })
+        settingsTab:AddSection({ Title = "About" })
         settingsTab:AddParagraph({
             Title = "Kami UI",
-            Content = "Menu script bertema hitam & emas dengan sudut siku-siku rapi.",
+            Content = "Minimalist dark & gold interface with sharp geometric styling.",
         })
     end
 
