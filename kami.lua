@@ -1,6 +1,29 @@
 --[[
-    KAMI UI - v1.4.6
+    KAMI UI - v1.5.0
     Pitch Dark Edition  ·  Minimal · Sharp · Animated
+
+    v1.5.0 changes:
+      - Layout persistence: window position / size, theme and collapsed state
+        are remembered per place (game) and restored on next launch
+        (opt out with cfg.NoSaveLayout = true)
+      - Global search: press Ctrl+K to fuzzy-jump to any tab or setting row;
+        picking a result selects the tab and highlights the row (Esc closes)
+      - Smarter notifications: only N show at once (queue for the rest),
+        optional do-not-disturb, and a rolling history
+        (Kami:SetNotificationLimit / :SetDoNotDisturb / :GetNotificationHistory)
+      - Anti-leak: all service connections are tracked and released on
+        Destroy(); module-level input handlers are torn down by Kami:Destroy()
+      - Theme crossfade: switching themes now fades smoothly instead of snapping
+      - Count-up animation for stat grid values (AddStatGrid)
+      - Tooltip on truncated row titles / descriptions
+
+    v1.4.7 changes:
+      - Performance: the window's ambient loops (gradient rim, header glint,
+        accent bar) now pause while the window is hidden and resume on show
+      - Micro-interactions: press feedback on tab buttons, dropdown buttons
+        and the colour swatch; toggle knob now springs with a slight overshoot
+      - Tab switching: page now slides in with a subtle scale pop for a
+        smoother, less abrupt transition
 
     v1.4.6 changes:
       - Dropdown: added a soft 9-slice drop shadow, a cleaner check-mark for
@@ -83,10 +106,11 @@ local HttpService      = game:GetService("HttpService")
 local RunService       = game:GetService("RunService")
 
 local Kami = {
-    Version = "1.4.6"
+    Version = "1.5.0"
 }
 
 local CONFIG_FOLDER  = "KamiUI_Configs"
+local LAYOUT_FOLDER  = "KamiUI_Layout"
 local AUTO_LOAD_FILE = "kamiui_autoload.json"
 
 --==================================================================
@@ -348,12 +372,13 @@ local function SpawnSpinBorder(parentOb, thickness, zindex, speed)
         Parent = parentOb,
     })
     local grad = AddGradient(ring, SpinSeq(), 0)
-    TweenService:Create(
+    local tw = TweenService:Create(
         grad,
         TweenInfo.new(speed or 6, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
         { Rotation = 360 }
-    ):Play()
-    return ring, grad
+    )
+    tw:Play()
+    return ring, grad, tw
 end
 
 -- Sharp flash ripple (no round corners)
@@ -383,6 +408,9 @@ end
 --==================================================================
 -- SCREEN
 --==================================================================
+if getgenv and getgenv().KamiUICleanup then
+    pcall(getgenv().KamiUICleanup)
+end
 if getgenv and getgenv().KamiUIInstance then
     pcall(function() getgenv().KamiUIInstance:Destroy() end)
 end
@@ -404,14 +432,42 @@ local function RegisterPaint(fn)
     pcall(fn)
 end
 
+-- Crossfade hooks: a window can register a veil so the instantaneous colour
+-- swap is hidden behind a short fade -> looks like a smooth theme transition.
+local ThemeFades = {}
+
+-- Service connections created at module scope (outside any window). Tracked so
+-- Kami:Destroy() can tear them down instead of leaking across re-executions.
+local GlobalConns = {}
+local function TrackGlobal(conn)
+    table.insert(GlobalConns, conn)
+    return conn
+end
+
+-- Per-window Bind() connection tables, so Kami:Destroy() can release every
+-- window even if Window:Destroy() was not called explicitly.
+local WindowConnections = {}
+
 local function ApplyTheme(themeName)
     local t = Themes[themeName]
     if not t then return false end
+    local changed = (themeName ~= CurrentThemeName)
+    if changed then
+        for i = #ThemeFades, 1, -1 do
+            local ok = pcall(ThemeFades[i].Cover, t)
+            if not ok then table.remove(ThemeFades, i) end
+        end
+    end
     CurrentTheme = t
     CurrentThemeName = themeName
     for i = #Repainters, 1, -1 do
         local ok = pcall(Repainters[i])
         if not ok then table.remove(Repainters, i) end
+    end
+    if changed then
+        for i = #ThemeFades, 1, -1 do
+            pcall(ThemeFades[i].Reveal)
+        end
     end
     return true
 end
@@ -421,6 +477,69 @@ function Kami:GetTheme() return CurrentThemeName, CurrentTheme end
 
 -- Keybind capture guard (prevents toggle key firing while binding)
 local BindingActive = false
+
+--==================================================================
+-- TOOLTIP  (shown when hovering a label whose text is truncated)
+--==================================================================
+local Tooltip
+local function EnsureTooltip()
+    if Tooltip and Tooltip.Parent then return Tooltip end
+    local tip = New("Frame", {
+        Name = "KamiTooltip",
+        BackgroundColor3 = CurrentTheme.Card,
+        BorderSizePixel = 0,
+        AutomaticSize = Enum.AutomaticSize.XY,
+        Visible = false,
+        ZIndex = 300,
+        Parent = Screen,
+    })
+    Corner(tip, 4)
+    Stroke(tip, CurrentTheme.BorderHover)
+    local lbl = New("TextLabel", {
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.XY,
+        Text = "",
+        Font = Enum.Font.Gotham,
+        TextSize = 10,
+        TextColor3 = CurrentTheme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = tip,
+    })
+    Pad(lbl, 5, 6, 8, 8)
+    tip.Label = lbl
+    RegisterPaint(function()
+        tip.BackgroundColor3 = CurrentTheme.Card
+        lbl.TextColor3 = CurrentTheme.Text
+    end)
+    Tooltip = tip
+    return tip
+end
+
+local function ShowTooltip(text, guiObj)
+    if not text or text == "" then return end
+    local tip = EnsureTooltip()
+    tip.Label.Text = text
+    tip.Visible = true
+    local abs, size = guiObj.AbsolutePosition, guiObj.AbsoluteSize
+    local vs = Screen.AbsoluteSize
+    local tipW = tip.AbsoluteSize.X
+    local x = math.clamp(abs.X, 4, math.max(4, vs.X - tipW - 4))
+    tip.Position = UDim2.fromOffset(x, abs.Y + size.Y + 4)
+end
+
+local function HideTooltip()
+    if Tooltip then Tooltip.Visible = false end
+end
+
+-- Attach a tooltip to a label, only appearing when its text overflows.
+local function AttachLabelTooltip(label, text)
+    label.MouseEnter:Connect(function()
+        if label.TextBounds.X > label.AbsoluteSize.X + 1 then
+            ShowTooltip(text, label)
+        end
+    end)
+    label.MouseLeave:Connect(HideTooltip)
+end
 
 --==================================================================
 -- LOADING SCREEN  (v1.3.0 - rebuilt)
@@ -829,14 +948,14 @@ local function CloseDropdown()
     end)
 end
 
-UserInputService.InputBegan:Connect(function(input)
+TrackGlobal(UserInputService.InputBegan:Connect(function(input)
     if not CurrentDropdown then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         if not OverDropdown and not CurrentDropdown.Hovered then
             CloseDropdown()
         end
     end
-end)
+end))
 
 -- Global color picker overlay
 local GlobalColorPicker = New("Frame", {
@@ -876,20 +995,45 @@ local function CloseColorPicker()
     end)
 end
 
-UserInputService.InputBegan:Connect(function(input)
+TrackGlobal(UserInputService.InputBegan:Connect(function(input)
     if not CurrentColorPicker then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         if not OverColorPicker and not CurrentColorPicker.Hovered then
             CloseColorPicker()
         end
     end
-end)
+end))
 
 --==================================================================
 -- NOTIFICATIONS
 --==================================================================
 local NotifyHolder = nil
 local NotifyCount = 0
+
+-- Notification manager state -------------------------------------------------
+local NotifyActive = 0          -- cards currently on screen
+local NotifyMax = 4             -- max cards visible at once
+local NotifyQueue = {}          -- waiting notifications
+local NotifyHistory = {}        -- recent notifications (newest first)
+local NotifyHistoryMax = 30
+local NotifyDND = false         -- do-not-disturb: record but do not pop up
+local DrainNotifyQueue          -- forward declaration (defined below)
+
+function Kami:SetNotificationLimit(n)
+    NotifyMax = math.max(1, math.floor(tonumber(n) or NotifyMax))
+    return NotifyMax
+end
+function Kami:SetDoNotDisturb(v)
+    NotifyDND = v and true or false
+    if not NotifyDND and DrainNotifyQueue then DrainNotifyQueue() end
+    return NotifyDND
+end
+function Kami:GetDoNotDisturb() return NotifyDND end
+function Kami:GetNotificationHistory() return NotifyHistory end
+function Kami:ClearNotificationQueue()
+    NotifyQueue = {}
+    return true
+end
 
 local function GetNotifyHolder()
     if NotifyHolder and NotifyHolder.Parent then return NotifyHolder end
@@ -912,7 +1056,7 @@ local function GetNotifyHolder()
     return NotifyHolder
 end
 
-function Kami:Notify(cfg)
+local function SpawnNotify(cfg, onDone)
     cfg = cfg or {}
     local T = CurrentTheme
     local nTitle = cfg.Title or "Notification"
@@ -1030,6 +1174,7 @@ function Kami:Notify(cfg)
             Tween(slot, 0.2, { Size = UDim2.new(1, 0, 0, 0) })
             task.delay(0.22, function() slot:Destroy() end)
         end)
+        if onDone then task.delay(0.25, onDone) end
     end
 
     if actionBtn then
@@ -1100,6 +1245,61 @@ function Kami:Notify(cfg)
     return { Dismiss = Dismiss }
 end
 
+--==========================================================================
+-- Notification manager: on-screen limit, queue, history and do-not-disturb.
+--==========================================================================
+local function DrainNotifyQueueImpl()
+    while not NotifyDND and NotifyActive < NotifyMax and #NotifyQueue > 0 do
+        local queued = table.remove(NotifyQueue, 1)
+        NotifyActive = NotifyActive + 1
+        SpawnNotify(queued, function()
+            NotifyActive = math.max(0, NotifyActive - 1)
+            DrainNotifyQueue()
+        end)
+    end
+end
+DrainNotifyQueue = DrainNotifyQueueImpl
+
+local function RecordHistory(cfg)
+    table.insert(NotifyHistory, 1, {
+        Title = cfg.Title or "Notification",
+        Content = cfg.Content or "",
+        Time = (os.time and os.time()) or 0,
+    })
+    while #NotifyHistory > NotifyHistoryMax do table.remove(NotifyHistory) end
+end
+
+function Kami:Notify(cfg)
+    cfg = cfg or {}
+    RecordHistory(cfg)
+
+    local handle = { _dismiss = nil }
+    function handle:Dismiss()
+        if self._dismiss then
+            local fn = self._dismiss
+            self._dismiss = nil
+            fn()
+        end
+        for i, q in ipairs(NotifyQueue) do
+            if q == cfg then table.remove(NotifyQueue, i) break end
+        end
+    end
+
+    if cfg.Force or not NotifyDND then
+        if NotifyActive < NotifyMax then
+            NotifyActive = NotifyActive + 1
+            local card = SpawnNotify(cfg, function()
+                NotifyActive = math.max(0, NotifyActive - 1)
+                DrainNotifyQueue()
+            end)
+            handle._dismiss = card and card.Dismiss
+        else
+            table.insert(NotifyQueue, cfg)
+        end
+    end
+    return handle
+end
+
 --==================================================================
 -- WINDOW
 --==================================================================
@@ -1111,6 +1311,7 @@ function Kami:CreateWindow(cfg)
     local minKey = cfg.MinimizeKey or Enum.KeyCode.RightControl
     local destroyed = false
     local connections = {}
+    table.insert(WindowConnections, connections)
 
     local function Bind(signal, fn)
         local conn = signal:Connect(fn)
@@ -1134,6 +1335,7 @@ function Kami:CreateWindow(cfg)
         AutoLoad = false,
         Visible = true,
         _Silent = false,
+        _Search = {},
         Compact = isCompact,
     }
 
@@ -1190,6 +1392,78 @@ function Kami:CreateWindow(cfg)
         return UDim2.fromOffset(nx, ny)
     end
 
+    --================ LAYOUT PERSISTENCE ================
+    -- Remember position / size / theme / collapsed state per place, so the
+    -- window reopens exactly as the user left it.
+    local LAYOUT_LOCK = (cfg.NoSaveLayout == true)
+
+    local function LayoutFile()
+        return LAYOUT_FOLDER .. "/" .. tostring(game.PlaceId or 0) .. ".json"
+    end
+
+    function Window:SaveLayout()
+        if LAYOUT_LOCK or not writefile then return false end
+        return (pcall(function()
+            if isfolder and makefolder and not isfolder(LAYOUT_FOLDER) then makefolder(LAYOUT_FOLDER) end
+            local vs = ScreenVec()
+            local pos = Holder.Position
+            -- Always store the *expanded* size (winSize), never the collapsed
+            -- height, so restoring later cannot leave the window tiny.
+            local sz = Vector2.new(
+                winSize.X.Scale * vs.X + winSize.X.Offset,
+                winSize.Y.Scale * vs.Y + winSize.Y.Offset
+            )
+            writefile(LayoutFile(), HttpService:JSONEncode({
+                x = pos.X.Scale * vs.X + pos.X.Offset,
+                y = pos.Y.Scale * vs.Y + pos.Y.Offset,
+                w = sz.X,
+                h = sz.Y,
+                theme = CurrentThemeName,
+                collapsed = Window.Collapsed and true or false,
+            }))
+        end))
+    end
+
+    local layoutSaveQueued = false
+    local function QueueSaveLayout()
+        if LAYOUT_LOCK or layoutSaveQueued then return end
+        layoutSaveQueued = true
+        task.delay(0.5, function()
+            layoutSaveQueued = false
+            if not destroyed then Window:SaveLayout() end
+        end)
+    end
+    Window.QueueSaveLayout = QueueSaveLayout
+
+    function Window:LoadLayout()
+        if LAYOUT_LOCK or not readfile or not isfile then return false end
+        local ok, exists = pcall(isfile, LayoutFile())
+        if not ok or not exists then return false end
+        local ok2, data = pcall(function() return HttpService:JSONDecode(readfile(LayoutFile())) end)
+        if not ok2 or type(data) ~= "table" then return false end
+        if type(data.theme) == "string" and Themes[data.theme] then ApplyTheme(data.theme) end
+        if data.w and data.h then
+            local s = FitWindowSize(UDim2.fromOffset(data.w, data.h))
+            Holder.Size = s
+            winSize = s
+        end
+        local sz = Holder.AbsoluteSize
+        if data.w and data.h then sz = Vector2.new(data.w, data.h) end
+        if data.x and data.y and sz.X > 0 and sz.Y > 0 then
+            local nx, ny = ClampCenter(data.x, data.y, sz)
+            Holder.Position = UDim2.fromOffset(nx, ny)
+        end
+        if data.collapsed == true then
+            task.defer(function()
+                if not destroyed and Window.SetCollapsed then Window:SetCollapsed(true) end
+            end)
+        end
+        return true
+    end
+
+    Window.Collapsed = false
+    pcall(function() Window:LoadLayout() end)
+
     local Shadow = New("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
@@ -1215,8 +1489,12 @@ function Kami:CreateWindow(cfg)
     })
     Corner(MainFrame, 8)
     local MainStroke = Stroke(MainFrame, CurrentTheme.Border)
+    -- Ambient (infinite) animations; paused while the window is hidden
+    local AmbientTweens = {}
+
     -- Animated gradient rim (rotates forever) peeking out behind the window
-    local BorderSpin, BorderSpinGrad = SpawnSpinBorder(Holder, 1, 0, 6)
+    local BorderSpin, BorderSpinGrad, BorderSpinTween = SpawnSpinBorder(Holder, 1, 0, 6)
+    if BorderSpinTween then table.insert(AmbientTweens, BorderSpinTween) end
 
     -- Fade veil (gives the window a "fade" without CanvasGroup)
     local Veil = New("Frame", {
@@ -1228,6 +1506,23 @@ function Kami:CreateWindow(cfg)
         Parent = MainFrame,
     })
     Corner(Veil, 8)
+
+    -- Smooth theme transition: cover the instantaneous colour swap with a veil
+    -- of the incoming background colour, then fade it away.
+    local themeFade = {
+        Cover = function(newTheme)
+            if not Window.Visible then return end
+            Veil.BackgroundColor3 = newTheme.Bg
+            Veil.Visible = true
+            Veil.BackgroundTransparency = 0
+        end,
+        Reveal = function()
+            Tween(Veil, 0.28, { BackgroundTransparency = 1 })
+            task.delay(0.3, function() if Window.Visible then Veil.Visible = false end end)
+            if QueueSaveLayout then QueueSaveLayout() end
+        end,
+    }
+    table.insert(ThemeFades, themeFade)
 
     RegisterPaint(function()
         MainFrame.BackgroundColor3 = CurrentTheme.Bg
@@ -1270,11 +1565,13 @@ function Kami:CreateWindow(cfg)
         NumberSequenceKeypoint.new(1, 1),
     })
     HeaderGlintGrad.Offset = Vector2.new(-1, 0)
-    TweenService:Create(
+    local HeaderGlintTween = TweenService:Create(
         HeaderGlintGrad,
         TweenInfo.new(3.2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
         { Offset = Vector2.new(1, 0) }
-    ):Play()
+    )
+    HeaderGlintTween:Play()
+    table.insert(AmbientTweens, HeaderGlintTween)
 
     -- Accent bar (replaces K logo mark)
     local AccentBar = New("Frame", {
@@ -1292,11 +1589,13 @@ function Kami:CreateWindow(cfg)
         ColorSequenceKeypoint.new(1, CurrentTheme.AccentMuted),
     }), 90)
     AccentBarGrad.Offset = Vector2.new(0, -1)
-    TweenService:Create(
+    local AccentBarTween = TweenService:Create(
         AccentBarGrad,
         TweenInfo.new(2.6, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1),
         { Offset = Vector2.new(0, 1) }
-    ):Play()
+    )
+    AccentBarTween:Play()
+    table.insert(AmbientTweens, AccentBarTween)
 
     local TitleName = New("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
@@ -1422,6 +1721,7 @@ function Kami:CreateWindow(cfg)
         CloseDropdown()
         CloseColorPicker()
         if v then
+            for _, tw in ipairs(AmbientTweens) do tw:Play() end
             Holder.Visible = true
             Veil.Visible = true
             Veil.BackgroundTransparency = 0
@@ -1431,6 +1731,7 @@ function Kami:CreateWindow(cfg)
             Tween(Veil, 0.35, { BackgroundTransparency = 1 })
             task.delay(0.36, function() if Window.Visible then Veil.Visible = false end end)
         else
+            for _, tw in ipairs(AmbientTweens) do tw:Pause() end
             Veil.Visible = true
             Tween(Veil, 0.16, { BackgroundTransparency = 0 })
             Tween(HolderScale, 0.22, { Scale = 0.94 }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
@@ -1452,6 +1753,7 @@ function Kami:CreateWindow(cfg)
     local collapsed = false
     function Window:SetCollapsed(state)
         collapsed = state and true or false
+        Window.Collapsed = collapsed
         CloseDropdown()
         CloseColorPicker()
         ShowSidebarFooter(not collapsed)
@@ -1460,6 +1762,7 @@ function Kami:CreateWindow(cfg)
         Tween(Holder, 0.45, { Size = target, Position = ClampHolderPosition(target) })
         MinBtn.Text = collapsed and "+" or "—"
         MinBtn.TextSize = collapsed and 14 or 10
+        QueueSaveLayout()
     end
 
     MinBtn.MouseButton1Click:Connect(function()
@@ -1504,12 +1807,13 @@ function Kami:CreateWindow(cfg)
                 CloseDropdown()
             end
         end)
-        UserInputService.InputEnded:Connect(function(inp)
+        Bind(UserInputService.InputEnded, function(inp)
             if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
                 dragging = false
+                QueueSaveLayout()
             end
         end)
-        UserInputService.InputChanged:Connect(function(inp)
+        Bind(UserInputService.InputChanged, function(inp)
             if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
                 local vs = ScreenVec()
                 local d = inp.Position - dragStart
@@ -1646,7 +1950,7 @@ function Kami:CreateWindow(cfg)
                 mDrag, moved, mStart, mPos = true, false, inp.Position, MobileBtn.Position
             end
         end)
-        UserInputService.InputChanged:Connect(function(inp)
+        Bind(UserInputService.InputChanged, function(inp)
             if mDrag and (inp.UserInputType == Enum.UserInputType.Touch or inp.UserInputType == Enum.UserInputType.MouseMovement) then
                 local d = inp.Position - mStart
                 if d.Magnitude > 6 then moved = true end
@@ -1840,6 +2144,8 @@ function Kami:CreateWindow(cfg)
         New("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Page })
         Pad(Page, 16, 16, 16, 16)
 
+        local PageScale = New("UIScale", { Scale = 1, Parent = Page })
+
         Page:GetPropertyChangedSignal("CanvasPosition"):Connect(CloseDropdown)
 
         local isActive = false
@@ -1870,8 +2176,10 @@ function Kami:CreateWindow(cfg)
 
             Page.Visible = true
             Page.CanvasPosition = Vector2.new(0, 0)
-            Page.Position = UDim2.fromOffset(0, 16)
-            Tween(Page, 0.45, { Position = UDim2.fromOffset(0, 0) })
+            Page.Position = UDim2.fromOffset(0, 18)
+            PageScale.Scale = 0.985
+            Tween(Page, 0.42, { Position = UDim2.fromOffset(0, 0) })
+            Tween(PageScale, 0.42, { Scale = 1 })
 
             Tween(TabIndicator, 0.4, { Size = UDim2.new(0, 2, 0, 16) }, Enum.EasingStyle.Back)
             Tween(TabBtn, 0.25, { BackgroundTransparency = 0 })
@@ -1894,12 +2202,17 @@ function Kami:CreateWindow(cfg)
             Tween(TabBtn, 0.18, { BackgroundTransparency = 1 })
             Tween(TabLbl, 0.18, { TextColor3 = CurrentTheme.TextMuted })
         end)
-        TabBtn.MouseButton1Click:Connect(SetActive)
+        TabBtn.MouseButton1Click:Connect(function()
+            Press(TabBtn)
+            SetActive()
+        end)
 
         table.insert(Window.Tabs, {
             Tab = Tab, Button = TabBtn, Label = TabLbl, Indicator = TabIndicator,
             Page = Page, Icon = iconImg, Deactivate = Deactivate, Activate = SetActive,
+            Title = tabTitle, Index = index,
         })
+        table.insert(Window._Search, { Tab = index, Title = tabTitle, Desc = "Tab", Row = nil })
         Tab.Select = SetActive
         if #Window.Tabs == 1 then SetActive() end
 
@@ -2016,6 +2329,11 @@ function Kami:CreateWindow(cfg)
                 t.TextColor3 = CurrentTheme.Text
                 if d then d.TextColor3 = CurrentTheme.TextMuted end
             end)
+            AttachLabelTooltip(t, title)
+            if d then AttachLabelTooltip(d, desc) end
+            if Window._Search then
+                table.insert(Window._Search, { Tab = index, Title = title or "", Desc = desc or "", Row = row })
+            end
             return t, d
         end
 
@@ -2336,7 +2654,7 @@ function Kami:CreateWindow(cfg)
                     Parent = sCard,
                 })
 
-                statRefs[stat.Title or ""] = sVal
+                statRefs[stat.Title or ""] = { lbl = sVal, cur = tonumber(tostring(stat.Value)) }
 
                 sCard.MouseEnter:Connect(function()
                     Tween(sStroke, 0.2, { Color = CurrentTheme.BorderHover })
@@ -2355,10 +2673,49 @@ function Kami:CreateWindow(cfg)
                 end)
             end
 
+            -- Count-up animation: split "45 ms" into "45" + " ms" and tween it.
+            local function splitNum(s)
+                s = tostring(s)
+                local pre, num, post = s:match("^(.-)(%-?%d+%.?%d*)(.*)$")
+                if num then return pre, tonumber(num), post end
+                return nil
+            end
+
+            local function startAnim(rec)
+                local a = rec.anim
+                if not a then return end
+                task.spawn(function()
+                    local t0 = os.clock()
+                    while rec.anim == a do
+                        local p = math.min((os.clock() - t0) / a.dur, 1)
+                        local eased = 1 - (1 - p) * (1 - p)
+                        local v = a.from + (a.to - a.from) * eased
+                        if rec.lbl and rec.lbl.Parent then
+                            rec.lbl.Text = a.pre .. tostring(math.floor(v + 0.5)) .. a.post
+                        end
+                        if p >= 1 then break end
+                        RunService.RenderStepped:Wait()
+                    end
+                end)
+            end
+
             local gridObj = {}
             function gridObj:Update(key, newVal)
-                local lbl = statRefs[key]
-                if lbl then lbl.Text = tostring(newVal) end
+                local rec = statRefs[key]
+                if not rec then return end
+                local pre, target, post = splitNum(newVal)
+                -- Count up only for short numeric values with a small prefix /
+                -- suffix (e.g. "120", "45 ms"); otherwise set the text directly.
+                if target and #pre <= 4 and #post <= 6 then
+                    local from = rec.cur or 0
+                    rec.cur = target
+                    rec.anim = { from = from, to = target, pre = pre, post = post, dur = 0.35 }
+                    startAnim(rec)
+                else
+                    rec.cur = nil
+                    rec.anim = nil
+                    rec.lbl.Text = tostring(newVal)
+                end
             end
             gridObj.Set = gridObj.Update
             return gridObj
@@ -2550,7 +2907,7 @@ function Kami:CreateWindow(cfg)
                 Tween(knob, t, {
                     Position = state and UDim2.new(1, -15, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
                     BackgroundColor3 = state and T.Bg or T.TextDull,
-                })
+                }, Enum.EasingStyle.Back)
                 Tween(box, t, { BackgroundColor3 = state and T.Accent or T.Bg })
                 Tween(bStroke, t, { Color = state and T.Accent or T.BorderHover })
             end
@@ -2798,7 +3155,7 @@ function Kami:CreateWindow(cfg)
                     Update(inp.Position.X)
                 end
             end)
-            UserInputService.InputEnded:Connect(function(inp)
+            Bind(UserInputService.InputEnded, function(inp)
                 if dragging and (inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch) then
                     dragging = false
                     Tween(knob, 0.2, { Size = UDim2.fromOffset(10, 10) })
@@ -2807,7 +3164,7 @@ function Kami:CreateWindow(cfg)
                     knobGlow.ImageTransparency = 0.85
                 end
             end)
-            UserInputService.InputChanged:Connect(function(inp)
+            Bind(UserInputService.InputChanged, function(inp)
                 if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
                     Update(inp.Position.X)
                 end
@@ -3100,6 +3457,7 @@ function Kami:CreateWindow(cfg)
             end
 
             local function OpenMenu()
+                Press(dropBtn)
                 if CurrentDropdown == handle then
                     CloseDropdown()
                     return
@@ -3408,7 +3766,10 @@ function Kami:CreateWindow(cfg)
                 Tween(sStroke, 0.2, { Color = CurrentTheme.Accent })
             end
 
-            swatch.MouseButton1Click:Connect(OpenPicker)
+            swatch.MouseButton1Click:Connect(function()
+                Press(swatch)
+                OpenPicker()
+            end)
 
             RegisterPaint(function()
                 hexLbl.TextColor3 = CurrentTheme.TextMuted
@@ -3555,7 +3916,7 @@ function Kami:CreateWindow(cfg)
                 pulse:Play()
             end)
 
-            UserInputService.InputBegan:Connect(function(inp, proc)
+            Bind(UserInputService.InputBegan, function(inp, proc)
                 if listening then
                     if inp.UserInputType == Enum.UserInputType.Keyboard then
                         if inp.KeyCode ~= Enum.KeyCode.Escape then
@@ -3596,6 +3957,200 @@ function Kami:CreateWindow(cfg)
         local t = Window.Tabs[i]
         if t then t.Activate() end
     end
+
+    --================ GLOBAL SEARCH (Ctrl+K) ================
+    local SearchModal
+
+    local function EnsureSearch()
+        if SearchModal and SearchModal.Modal.Parent then return SearchModal end
+
+        local modal = New("TextButton", {
+            Name = "KamiSearch",
+            Size = UDim2.fromScale(1, 1),
+            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundTransparency = 0.55,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            Visible = false,
+            ZIndex = 250,
+            Parent = Screen,
+        })
+
+        local panel = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, 0, 0.1, 0),
+            Size = UDim2.fromOffset(420, 56),
+            BackgroundColor3 = CurrentTheme.Card,
+            BorderSizePixel = 0,
+            ClipsDescendants = true,
+            ZIndex = 251,
+            Parent = modal,
+        })
+        Corner(panel, 8)
+        local pStroke = Stroke(panel, CurrentTheme.BorderHover)
+
+        local box = New("TextBox", {
+            Size = UDim2.new(1, 0, 0, 48),
+            BackgroundColor3 = CurrentTheme.Bg,
+            BorderSizePixel = 0,
+            Text = "",
+            PlaceholderText = "Search tabs and settings…",
+            Font = Enum.Font.Gotham,
+            TextSize = 13,
+            TextColor3 = CurrentTheme.Text,
+            PlaceholderColor3 = CurrentTheme.TextDull,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ClearTextOnFocus = false,
+            ZIndex = 252,
+            Parent = panel,
+        })
+        Pad(box, 0, 0, 14, 14)
+
+        local results = New("ScrollingFrame", {
+            Position = UDim2.fromOffset(0, 48),
+            Size = UDim2.new(1, 0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 2,
+            ScrollBarImageColor3 = CurrentTheme.BorderHover,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            ZIndex = 252,
+            Parent = panel,
+        })
+        New("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = results })
+        Pad(results, 6, 6, 6, 6)
+
+        RegisterPaint(function()
+            panel.BackgroundColor3 = CurrentTheme.Card
+            pStroke.Color = CurrentTheme.BorderHover
+            box.BackgroundColor3 = CurrentTheme.Bg
+            box.TextColor3 = CurrentTheme.Text
+            box.PlaceholderColor3 = CurrentTheme.TextDull
+            results.ScrollBarImageColor3 = CurrentTheme.BorderHover
+        end)
+
+        SearchModal = { Modal = modal, Panel = panel, Box = box, Results = results }
+
+        modal.MouseButton1Click:Connect(function() Window:CloseSearch() end)
+        box:GetPropertyChangedSignal("Text"):Connect(function() Window:RefreshSearch() end)
+        return SearchModal
+    end
+
+    local function SelectSearchResult(item)
+        Window:CloseSearch()
+        Window:SelectTab(item.Tab)
+        local entry = Window.Tabs[item.Tab]
+        local page = entry and entry.Page
+        if page and item.Row and item.Row.Parent then
+            task.defer(function()
+                page.CanvasPosition = Vector2.new(0, math.max(0, item.Row.Position.Y.Offset - 16))
+                local hl = New("Frame", {
+                    Size = UDim2.fromScale(1, 1),
+                    BackgroundColor3 = CurrentTheme.Accent,
+                    BackgroundTransparency = 0.72,
+                    BorderSizePixel = 0,
+                    ZIndex = 5,
+                    Parent = item.Row,
+                })
+                Corner(hl, 5)
+                Tween(hl, 0.55, { BackgroundTransparency = 1 })
+                task.delay(0.6, function() hl:Destroy() end)
+            end)
+        end
+    end
+
+    function Window:RefreshSearch()
+        if not SearchModal then return end
+        local q = string.lower(SearchModal.Box.Text or "")
+        q = q:gsub("^%s+", ""):gsub("%s+$", "")
+        for _, ch in ipairs(SearchModal.Results:GetChildren()) do
+            if ch:IsA("TextButton") then ch:Destroy() end
+        end
+        local shown = 0
+        for _, item in ipairs(Window._Search) do
+            local hay = string.lower((item.Title or "") .. " " .. (item.Desc or ""))
+            if q == "" or hay:find(q, 1, true) then
+                shown = shown + 1
+                local entry = Window.Tabs[item.Tab]
+                local row = New("TextButton", {
+                    Size = UDim2.new(1, 0, 0, 34),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Text = "",
+                    AutoButtonColor = false,
+                    LayoutOrder = shown,
+                    Parent = SearchModal.Results,
+                })
+                Corner(row, 5)
+                New("TextLabel", {
+                    Position = UDim2.fromOffset(10, 4),
+                    Size = UDim2.new(1, -90, 0, 14),
+                    BackgroundTransparency = 1,
+                    Text = item.Title or "",
+                    Font = Enum.Font.GothamMedium,
+                    TextSize = 11,
+                    TextColor3 = CurrentTheme.Text,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    Parent = row,
+                })
+                local sub = (entry and entry.Title or "Tab")
+                if item.Desc and item.Desc ~= "" then sub = sub .. "  ·  " .. item.Desc end
+                New("TextLabel", {
+                    Position = UDim2.fromOffset(10, 18),
+                    Size = UDim2.new(1, -90, 0, 12),
+                    BackgroundTransparency = 1,
+                    Text = sub,
+                    Font = Enum.Font.Gotham,
+                    TextSize = 9,
+                    TextColor3 = CurrentTheme.TextDull,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    Parent = row,
+                })
+                row.MouseEnter:Connect(function() Tween(row, 0.15, { BackgroundColor3 = CurrentTheme.Bg, BackgroundTransparency = 0 }) end)
+                row.MouseLeave:Connect(function() Tween(row, 0.15, { BackgroundTransparency = 1 }) end)
+                row.MouseButton1Click:Connect(function() SelectSearchResult(item) end)
+                if shown >= 40 then break end
+            end
+        end
+        local visible = math.min(shown, 6)
+        SearchModal.Panel.Size = UDim2.fromOffset(420, 48 + visible * 36 + (shown > 0 and 10 or 0))
+        SearchModal.Results.Size = UDim2.new(1, 0, 0, visible * 36)
+    end
+
+    function Window:OpenSearch()
+        if destroyed then return end
+        local s = EnsureSearch()
+        if not Window.Visible then Window:SetVisible(true) end
+        s.Modal.Visible = true
+        s.Box.Text = ""
+        Window:RefreshSearch()
+        s.Box:CaptureFocus()
+    end
+
+    function Window:CloseSearch()
+        if SearchModal then
+            SearchModal.Modal.Visible = false
+            SearchModal.Box:ReleaseFocus()
+        end
+    end
+
+    Bind(UserInputService.InputBegan, function(inp, proc)
+        if destroyed or proc or BindingActive then return end
+        local ctrl = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+        if inp.KeyCode == Enum.KeyCode.K and ctrl then
+            if SearchModal and SearchModal.Modal.Visible then
+                Window:CloseSearch()
+            else
+                Window:OpenSearch()
+            end
+        elseif inp.KeyCode == Enum.KeyCode.Escape and SearchModal and SearchModal.Modal.Visible then
+            Window:CloseSearch()
+        end
+    end)
 
     function Window:Notify(c) return Kami:Notify(c) end
 
@@ -3719,6 +4274,27 @@ function Kami:CreateWindow(cfg)
                 WriteAutoLoad()
             end,
         })
+
+        settingsTab:AddSection({ Title = "Notifications" })
+
+        settingsTab:AddToggle({
+            Title = "Do Not Disturb",
+            Description = "Record notifications but don't pop them up",
+            Default = Kami:GetDoNotDisturb(),
+            Callback = function(state)
+                Kami:SetDoNotDisturb(state)
+            end,
+        })
+
+        settingsTab:AddDropdown({
+            Title = "Max On Screen",
+            Description = "How many notifications stack at once",
+            Values = { "2", "3", "4", "5", "6" },
+            Default = tostring(NotifyMax),
+            Callback = function(v)
+                Kami:SetNotificationLimit(tonumber(v))
+            end,
+        })
     end
 
     --================ DISCORD PROMPT ================
@@ -3761,11 +4337,17 @@ function Kami:CreateWindow(cfg)
     function Window:Destroy()
         if destroyed then return end
         destroyed = true
+        for i = #ThemeFades, 1, -1 do
+            if ThemeFades[i] == themeFade then table.remove(ThemeFades, i) end
+        end
         CloseDropdown()
         CloseColorPicker()
         for i = #connections, 1, -1 do
             pcall(function() connections[i]:Disconnect() end)
             connections[i] = nil
+        end
+        for i = #WindowConnections, 1, -1 do
+            if WindowConnections[i] == connections then table.remove(WindowConnections, i) end
         end
         pcall(function()
             if MobileBtn then MobileBtn:Destroy() end
@@ -3788,9 +4370,24 @@ function Kami:Destroy()
     pcall(function()
         if Screen then Screen:Destroy() end
     end)
+    for i = #GlobalConns, 1, -1 do
+        pcall(function() GlobalConns[i]:Disconnect() end)
+        GlobalConns[i] = nil
+    end
+    for _, conns in ipairs(WindowConnections) do
+        for i = #conns, 1, -1 do
+            pcall(function() conns[i]:Disconnect() end)
+            conns[i] = nil
+        end
+    end
+    WindowConnections = {}
     if getgenv and getgenv().KamiUIInstance then
         getgenv().KamiUIInstance = nil
     end
+end
+
+if getgenv then
+    getgenv().KamiUICleanup = function() pcall(function() Kami:Destroy() end) end
 end
 
 return Kami
